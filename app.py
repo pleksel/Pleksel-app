@@ -71,4 +71,5 @@ if page == "📁 Templates":
                 load_template_from_excel(uploaded_conf)
 
     # --- De rest van je editor velden (Master Data, Dozen, Pallets) blijven hieronder staan ---
+
     # ... (Zoals in de vorige code)
