@@ -1,176 +1,157 @@
 import streamlit as st
 import pandas as pd
-import math, io, os
+import math, io
 from fpdf import FPDF
 
 # =========================================================
 # 1. PAGE CONFIG & THEMA
 # =========================================================
-st.set_page_config(page_title="PLEKSEL", page_icon="🚛", layout="wide")
+st.set_page_config(page_title="PLEKSEL PRO", page_icon="🚛", layout="wide")
 
 LANGS = {
     "NL": {
         "nav_templates": "📁 Templates", "nav_orders": "📑 Orders", "nav_calc": "🚛 Pallet/Truck berekening",
-        "header_storage": "🗄️ Online Bestandsbeheer", "btn_download": "💾 Download Template", "btn_upload": "📂 Inladen",
-        "master_data": "📦 Master Data", "boxes": "🎁 Dozen (CM)", "pallets": "🟫 Pallets (CM)", "trucks": "🚛 Custom Trucks",
-        "transport": "Transport", "pallet": "Pallet", "box": "Doos Type", "auto_box": "Slimme Doos Selectie (Splitsen)",
-        "btn_calc": "Bereken Planning & PDF", "pals": "Pallets", "weight": "Totaal Gewicht", "meters": "Laadmeters",
-        "num_trucks": "Trucks Nodig", "warn_orders": "Voeg eerst orders toe!", "order_mgmt": "📝 Orderbeheer"
+        "btn_calc": "Bereken Planning", "pals": "Pallets", "weight": "Totaal Gewicht (KG)", 
+        "meters": "Laadmeters", "num_trucks": "Trucks Nodig", "warn_orders": "Voeg eerst orders toe!",
+        "opt_stack": "Pallets stapelbaar?", "opt_mix_box": "Meerdere soorten dozen toestaan?",
+        "opt_mixed_items": "Mixed items in dozen toestaan?", "opt_separate": "Orders apart berekenen?",
+        "btn_pdf": "📄 Download PDF", "header_results": "📊 Berekeningsresultaten"
     },
     "EN": {
         "nav_templates": "📁 Templates", "nav_orders": "📑 Orders", "nav_calc": "🚛 Pallet/Truck calculation",
-        "header_storage": "🗄️ Storage Management", "btn_download": "💾 Download Template", "btn_upload": "📂 Load",
-        "master_data": "📦 Master Data", "boxes": "🎁 Boxes (CM)", "pallets": "🟫 Pallets (CM)", "trucks": "🚛 Custom Trucks",
-        "transport": "Transport", "pallet": "Pallet", "box": "Box Type", "auto_box": "Smart Box Selection (Split)",
-        "btn_calc": "Calculate & PDF", "pals": "Pallets", "weight": "Total Weight", "meters": "Loading Meters",
-        "num_trucks": "Trucks Needed", "warn_orders": "Add orders first!", "order_mgmt": "📝 Order Management"
-    },
-    "DE": { "nav_templates": "📁 Vorlagen", "nav_orders": "📑 Bestellungen", "nav_calc": "🚛 Paletten/LKW Berechnung", "header_storage": "🗄️ Dateiverwaltung", "btn_download": "💾 Download", "btn_upload": "📂 Laden", "master_data": "📦 Stammdaten", "boxes": "🎁 Kartons", "pallets": "🟫 Paletten", "trucks": "🚛 LKWs", "transport": "Transport", "pallet": "Palette", "box": "Karton", "auto_box": "Smarte Kartonwahl", "btn_calc": "Berechnen", "pals": "Paletten", "weight": "Gewicht", "meters": "Lademeter", "num_trucks": "LKWs", "warn_orders": "Bestellungen fehlen!", "order_mgmt": "📝 Verwaltung" },
-    "PL": { "nav_templates": "📁 Szablony", "nav_orders": "📑 Zamówienia", "nav_calc": "🚛 Kalkulacja", "header_storage": "🗄️ Zarządzanie", "btn_download": "💾 Pobierz", "btn_upload": "📂 Załaduj", "master_data": "📦 Dane", "boxes": "🎁 Pudełka", "pallets": "🟫 Palety", "trucks": "🚛 Ciężarówki", "transport": "Transport", "pallet": "Paleta", "box": "Pudełko", "auto_box": "Inteligentny dobór", "btn_calc": "Oblicz", "pals": "Palety", "weight": "Waga", "meters": "Metry", "num_trucks": "Ciężarówki", "warn_orders": "Dodaj zamówienia!", "order_mgmt": "📝 Zarządzanie" }
+        "btn_calc": "Calculate Planning", "pals": "Pallets", "weight": "Total Weight (KG)", 
+        "meters": "Loading Meters", "num_trucks": "Trucks Needed", "warn_orders": "Add orders first!",
+        "opt_stack": "Pallets stackable?", "opt_mix_box": "Allow multiple box types?",
+        "opt_mixed_items": "Allow mixed items in boxes?", "opt_separate": "Calculate orders separately?",
+        "btn_pdf": "📄 Download PDF", "header_results": "📊 Calculation Results"
+    }
 }
 
-st.sidebar.title("Language / Taal")
-lang_choice = st.sidebar.selectbox("Select Language", ["NL", "EN", "DE", "PL"])
+st.sidebar.title("Instellingen / Settings")
+lang_choice = st.sidebar.selectbox("Language", ["NL", "EN"])
 T = LANGS[lang_choice]
 
 # =========================================================
-# 2. INITIALISATIE & DTYPES
+# 2. DATA INITIALISATIE
 # =========================================================
-MASTER_COLS = {"ItemNr": str,"Omschrijving": str,"Lengte": float,"Breedte": float,"Hoogte": float,"Gewicht": float,"Stapelbaar": bool}
-BOXES_COLS = {"Naam": str,"Lengte": float,"Breedte": float,"Hoogte": float,"Gewicht": float}
-PALLETS_COLS = {"Naam": str,"Lengte": float,"Breedte": float,"MaxHoogte": float,"Gewicht": float, "PalletHoogte": float, "PalletStapelbaar": bool}
-ORDERS_COLS = {"OrderNr": str,"ItemNr": str,"Aantal": int}
-TRUCK_CUSTOM_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "Hoogte": float, "MaxGewicht": float}
+MASTER_COLS = {"ItemNr": str, "Lengte": float, "Breedte": float, "Hoogte": float, "Gewicht": float}
+BOXES_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "Hoogte": float, "Gewicht": float}
+PALLETS_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "MaxHoogte": float, "Gewicht": float, "PalletHoogte": float, "PalletStapelbaar": bool}
 
-def enforce_dtypes(df, dtypes):
-    if df is None or (isinstance(df, pd.DataFrame) and df.empty): return pd.DataFrame(columns=dtypes.keys())
-    df_copy = df.copy()
-    for col, dtype in dtypes.items():
-        if col not in df_copy.columns: df_copy[col] = 0.0 if dtype in (float, int) else ("" if dtype == str else True)
-        if dtype in (float, int): df_copy[col] = pd.to_numeric(df_copy[col], errors='coerce').fillna(0)
-    return df_copy[list(dtypes.keys())]
-
-for key, cols in [("master_data_df", MASTER_COLS), ("boxes_df", BOXES_COLS), ("pallets_df", PALLETS_COLS), ("orders_df", ORDERS_COLS), ("custom_trucks_df", TRUCK_CUSTOM_COLS)]:
-    if key not in st.session_state: st.session_state[key] = enforce_dtypes(None, cols)
+for key, cols in [("master_data_df", MASTER_COLS), ("boxes_df", BOXES_COLS), ("pallets_df", PALLETS_COLS), ("orders_df", {"OrderNr": str, "ItemNr": str, "Aantal": int})]:
+    if key not in st.session_state: st.session_state[key] = pd.DataFrame(columns=cols.keys())
 
 # =========================================================
-# 3. SLIMME REKENFUNCTIES (SPLITSEN)
+# 3. CORE LOGICA (GEWICHT & VERPAKKING)
 # =========================================================
-def bepaal_dozen_voor_order(groep_items, dozen_df):
-    """Berekent hoeveel dozen er nodig zijn, splitst indien nodig."""
-    if dozen_df.empty: return "Standaard", 0.0, 1
+def bereken_verpakking(df_items, boxes_df, allow_mix_box, allow_mixed_items):
+    if boxes_df.empty: return [{"Box": "Geen", "Aantal": 0, "Gewicht": 0}]
     
-    # Sorteer dozen op volume
-    dozen = dozen_df.copy()
-    dozen['vol'] = dozen['Lengte'] * dozen['Breedte'] * dozen['Hoogte']
-    dozen = dozen.sort_values('vol', ascending=False)
+    sorted_boxes = boxes_df.copy()
+    sorted_boxes['vol'] = sorted_boxes['Lengte'] * sorted_boxes['Breedte'] * sorted_boxes['Hoogte']
+    sorted_boxes = sorted_boxes.sort_values('vol', ascending=False)
     
-    total_vol_items = (groep_items['Lengte'] * groep_items['Breedte'] * groep_items['Hoogte'] * groep_items['Aantal']).sum() * 1.15
-    grootste_doos = dozen.iloc[0]
+    verpakkings_resultaat = []
     
-    num_dozen = math.ceil(total_vol_items / grootste_doos['vol'])
-    return grootste_doos['Naam'], grootste_doos['Gewicht'], num_dozen
-
-def create_pdf(summary, advies_df):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, "PLEKSEL Transport Report", ln=True, align='C')
-    pdf.set_font("Arial", '', 12)
-    for k, v in summary.items(): pdf.cell(200, 10, f"{k}: {v}", ln=True)
-    pdf.ln(10)
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(200, 10, "Order Details:", ln=True)
-    pdf.set_font("Arial", '', 10)
-    for _, r in advies_df.iterrows():
-        pdf.cell(200, 8, f"Order {r['Order']}: {r['Aantal Dozen']}x {r['Box']} ({r['Gewicht p/st']}kg)", ln=True)
-    return pdf.output(dest='S').encode('latin-1')
+    # Als we geen mixed items willen, groeperen we per item
+    groups = [df_items] if allow_mixed_items else [df_items[df_items['ItemNr'] == i] for i in df_items['ItemNr'].unique()]
+    
+    for group in groups:
+        totaal_vol = (group['Lengte'] * group['Breedte'] * group['Hoogte'] * group['Aantal']).sum() * 1.15
+        
+        if not allow_mix_box:
+            # Gebruik alleen de best passende enkele doossoort
+            best_box = sorted_boxes[sorted_boxes['vol'] >= (totaal_vol / group['Aantal'].sum())].iloc[-1] if not sorted_boxes.empty else sorted_boxes.iloc[0]
+            aantal_dozen = math.ceil(totaal_vol / best_box['vol'])
+            verpakkings_resultaat.append({"Box": best_box['Naam'], "Aantal": aantal_dozen, "Gewicht": best_box['Gewicht'] * aantal_dozen})
+        else:
+            # Mix van dozen (vul eerst de grootste)
+            overgebleven_vol = totaal_vol
+            for _, box in sorted_boxes.iterrows():
+                if overgebleven_vol <= 0: break
+                aantal = int(overgebleven_vol // box['vol'])
+                if aantal > 0:
+                    verpakkings_resultaat.append({"Box": box['Naam'], "Aantal": aantal, "Gewicht": box['Gewicht'] * aantal})
+                    overgebleven_vol -= (aantal * box['vol'])
+            if overgebleven_vol > 0: # Restant in kleinste doos
+                small_box = sorted_boxes.iloc[-1]
+                verpakkings_resultaat.append({"Box": small_box['Naam'], "Aantal": 1, "Gewicht": small_box['Gewicht']})
+                
+    return verpakkings_resultaat
 
 # =========================================================
-# 4. UI PAGINA'S
+# 4. UI
 # =========================================================
 st.markdown(f"<h1>PLEKSEL 🚛</h1>", unsafe_allow_html=True)
 page = st.sidebar.radio("Menu", [T["nav_templates"], T["nav_orders"], T["nav_calc"]])
 
 if page == T["nav_templates"]:
-    st.header(T["header_storage"])
-    c1, c2 = st.columns(2)
-    
-    # Export / Import logic
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        for k in ["master_data_df", "boxes_df", "pallets_df", "orders_df", "custom_trucks_df"]:
-            st.session_state[k].to_excel(writer, sheet_name=k[:10], index=False)
-    c1.download_button(T["btn_download"], output.getvalue(), "config.xlsx", use_container_width=True)
-    
-    up = c2.file_uploader(T["btn_upload"], type="xlsx")
-    if up and st.button("Bevestig Upload"):
-        xls = pd.ExcelFile(up)
-        # Snel inladen op basis van sheet index om fouten te voorkomen
-        st.session_state.master_data_df = enforce_dtypes(pd.read_excel(xls, xls.sheet_names[0]), MASTER_COLS)
-        st.session_state.boxes_df = enforce_dtypes(pd.read_excel(xls, xls.sheet_names[1]), BOXES_COLS)
-        st.session_state.pallets_df = enforce_dtypes(pd.read_excel(xls, xls.sheet_names[2]), PALLETS_COLS)
-        st.rerun()
-
-    st.subheader(T["master_data"])
-    st.session_state.master_data_df = st.data_editor(st.session_state.master_data_df, num_rows="dynamic", use_container_width=True)
-    col1, col2 = st.columns(2)
-    st.session_state.boxes_df = col1.data_editor(st.session_state.boxes_df, num_rows="dynamic", use_container_width=True)
-    st.session_state.pallets_df = col2.data_editor(st.session_state.pallets_df, num_rows="dynamic", use_container_width=True)
+    st.header(T["nav_templates"])
+    st.session_state.master_data_df = st.data_editor(st.session_state.master_data_df, num_rows="dynamic", key="m1")
+    st.session_state.boxes_df = st.data_editor(st.session_state.boxes_df, num_rows="dynamic", key="b1")
+    st.session_state.pallets_df = st.data_editor(st.session_state.pallets_df, num_rows="dynamic", key="p1")
 
 elif page == T["nav_orders"]:
-    st.header(T["order_mgmt"])
-    st.session_state.orders_df = st.data_editor(st.session_state.orders_df, num_rows="dynamic", use_container_width=True)
+    st.header(T["nav_orders"])
+    st.session_state.orders_df = st.data_editor(st.session_state.orders_df, num_rows="dynamic", key="o1")
 
 elif page == T["nav_calc"]:
     st.header(T["nav_calc"])
-    if st.session_state.orders_df.empty: st.warning(T["warn_orders"]); st.stop()
     
-    c1, c2, c3 = st.columns(3)
-    t_opts = ["Standaard Trailer (13.6m)"] + st.session_state.custom_trucks_df['Naam'].tolist()
-    sel_t = c1.selectbox(T["transport"], t_opts)
-    sel_p = c2.selectbox(T["pallet"], st.session_state.pallets_df['Naam'].tolist() if not st.session_state.pallets_df.empty else ["Geen"])
-    box_opt = c3.selectbox(T["box"], [T["auto_box"]] + st.session_state.boxes_df['Naam'].tolist())
+    with st.expander("⚙️ Logistieke Parameters", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        allow_mix_box = col1.toggle(T["opt_mix_box"], value=False)
+        allow_mixed_items = col2.toggle(T["opt_mixed_items"], value=True)
+        separate_orders = col3.toggle(T["opt_separate"], value=False)
+        
+        sel_p_name = st.selectbox("Kies Pallet Type", st.session_state.pallets_df['Naam'].unique())
+        p_info = st.session_state.pallets_df[st.session_state.pallets_df['Naam'] == sel_p_name].iloc[0]
 
     if st.button(T["btn_calc"]):
-        df_f = st.session_state.orders_df.merge(st.session_state.master_data_df, on="ItemNr")
-        box_data, advies = {}, []
+        orders = st.session_state.orders_df.merge(st.session_state.master_data_df, on="ItemNr")
         
-        for nr, grp in df_f.groupby('OrderNr'):
-            n, w, count = bepaal_dozen_voor_order(grp, st.session_state.boxes_df)
-            box_data[nr] = {"gewicht_extra": w * count, "aantal_dozen": count}
-            advies.append({"Order": nr, "Box": n, "Gewicht p/st": w, "Aantal Dozen": count})
+        # Groeperen op basis van 'apart berekenen'
+        calc_groups = orders.groupby('OrderNr') if separate_orders else [("Gecombineerd", orders)]
         
-        advies_df = pd.DataFrame(advies)
-        st.table(advies_df)
-        
-        # Truck/Pallet logica
-        p_row = st.session_state.pallets_df[st.session_state.pallets_df['Naam'] == sel_p].iloc[0]
-        t_dims = {"Lengte": 13.6, "Breedte": 2.4, "MaxGewicht": 24000} # Default
-        
-        total_pals = 0
-        total_kg = 0
-        for nr, grp in df_f.groupby('OrderNr'):
-            # Simpele schatting: Hoeveel van deze items passen op de geselecteerde pallet
-            # We gebruiken hier een vullingsgraad van 85% voor de pallethoogte
-            item = grp.iloc[0]
-            fit_layer = (p_row['Lengte'] // item['Lengte']) * (p_row['Breedte'] // item['Breedte'])
-            max_lagen = (p_row['MaxHoogte'] - p_row['PalletHoogte']) // item['Hoogte']
-            per_pal = max(1, fit_layer * max_lagen)
-            pals_needed = math.ceil(item['Aantal'] / per_pal)
+        for name, group in calc_groups:
+            st.subheader(f"Resultaat: {name}")
             
-            total_pals += pals_needed
-            total_kg += (grp['Gewicht'] * grp['Aantal']).sum() + box_data[nr]['gewicht_extra'] + (pals_needed * p_row['Gewicht'])
-
-        lm = (total_pals / 2) * (p_row['Lengte'] / 100) # Uitgaande van 2 pallets naast elkaar
-        num_trucks = max(1, math.ceil(lm / 13.6) or math.ceil(total_kg / 24000))
-
-        res = st.columns(4)
-        res[0].metric(T["pals"], f"{total_pals} LP")
-        res[1].metric(T["weight"], f"{int(total_kg)} KG")
-        res[2].metric(T["meters"], f"{lm:.2f} m")
-        res[3].metric(T["num_trucks"], num_trucks)
-        
-        summary = {"Transport": sel_t, "Pallet": sel_p, "Totaal Pallets": total_pals, "Totaal Gewicht": f"{int(total_kg)} KG"}
-        pdf_file = create_pdf(summary, advies_df)
-        st.download_button("📄 Download PDF Rapport", pdf_file, "Pleksel_Rapport.pdf", "application/pdf")
+            # 1. Verpakking
+            verpakking = bereken_verpakking(group, st.session_state.boxes_df, allow_mix_box, allow_mixed_items)
+            extra_gewicht_verpakking = sum(v['Gewicht'] for v in verpakking)
+            
+            # 2. Palletisering (Schatting op basis van volume en stapelbaarheid)
+            item_vol = (group['Lengte'] * group['Breedte'] * group['Hoogte'] * group['Aantal']).sum()
+            pallet_vol_cap = p_info['Lengte'] * p_info['Breedte'] * (p_info['MaxHoogte'] - p_info['PalletHoogte'])
+            
+            aantal_pals = math.ceil(item_vol / pallet_vol_cap)
+            
+            # Check stapelbaarheid uit template
+            is_stapelbaar = p_info['PalletStapelbaar']
+            laadmeters_pals = aantal_pals if not is_stapelbaar else math.ceil(aantal_pals / 2)
+            laadmeters = (laadmeters_pals * p_row['Lengte'] if 'p_row' in locals() else laadmeters_pals * p_info['Lengte']) / 240 # Simpele LM berekening
+            
+            # 3. Totaal Gewicht (ZEER BELANGRIJK)
+            netto_gewicht_items = (group['Gewicht'] * group['Aantal']).sum()
+            totaal_gewicht = netto_gewicht_items + extra_gewicht_verpakking + (aantal_pals * p_info['Gewicht'])
+            
+            # UI Metrics
+            m1, m2, m3 = st.columns(3)
+            m1.metric(T["pals"], f"{aantal_pals} LP")
+            m2.metric(T["weight"], f"{totaal_gewicht:.2f} kg")
+            m3.metric(T["meters"], f"{max(0.4, laadmeters):.2f} m")
+            
+            # Doos detail
+            st.write("**Geadviseerde Verpakking:**")
+            st.table(pd.DataFrame(verpakking))
+            
+            # PDF Per Resultaat
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", 'B', 16)
+            pdf.cell(200, 10, f"Rapport: {name}", ln=True)
+            pdf.set_font("Arial", '', 12)
+            pdf.cell(200, 10, f"Totaal Gewicht: {totaal_gewicht:.2f} kg", ln=True)
+            pdf.cell(200, 10, f"Pallets: {aantal_pals}", ln=True)
+            st.download_button(f"📥 Download PDF {name}", pdf.output(dest='S').encode('latin-1'), f"Rapport_{name}.pdf")
+            st.divider()
