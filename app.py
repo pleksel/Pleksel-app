@@ -15,52 +15,52 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Meertalige teksten
 LANGS = {
     "NL": {
         "nav_templates": "📁 Templates", "nav_orders": "📑 Orders", "nav_calc": "🚛 Pallet/Truck berekening",
         "header_storage": "🗄️ Online Bestandsbeheer", "info_storage": "Download hier je volledige configuratie om deze later weer in te laden.",
         "btn_download": "💾 Download Huidige Template", "btn_upload": "📂 Inladen", "master_data": "📦 Master Data",
         "boxes": "🎁 Dozen (CM)", "pallets": "🟫 Pallets (CM)", "trucks": "🚛 Custom Trucks", "order_mgmt": "📝 Orderbeheer",
-        "transport": "Transport", "pallet": "Pallet", "box": "Doos", "auto_box": "Automatisch Optimaliseren",
+        "transport": "Transport", "pallet": "Pallet", "box": "Doos", "auto_box": "Automatisch Optimaliseren (Alleen uit lijst)",
         "btn_calc": "Bereken & Genereer Rapport", "summary": "Samenvatting", "pals": "Pallets", "weight": "Gewicht",
-        "meters": "Laadmeters", "num_trucks": "Trucks Nodig", "btn_pdf": "📄 Download PDF Rapport", "warn_orders": "Voeg eerst orders toe!"
+        "meters": "Laadmeters", "num_trucks": "Trucks Nodig", "btn_pdf": "📄 Download PDF Rapport", "warn_orders": "Voeg eerst orders toe!",
+        "no_box": "GEEN PASSENDE DOOS GEVONDEN IN LIJST"
     },
     "EN": {
         "nav_templates": "📁 Templates", "nav_orders": "📑 Orders", "nav_calc": "🚛 Pallet/Truck calculation",
         "header_storage": "🗄️ Online Storage Management", "info_storage": "Download your full configuration here to reload it later.",
         "btn_download": "💾 Download Current Template", "btn_upload": "📂 Load", "master_data": "📦 Master Data",
         "boxes": "🎁 Boxes (CM)", "pallets": "🟫 Pallets (CM)", "trucks": "🚛 Custom Trucks", "order_mgmt": "📝 Order Management",
-        "transport": "Transport", "pallet": "Pallet", "box": "Box", "auto_box": "Automatic Optimization",
+        "transport": "Transport", "pallet": "Pallet", "box": "Box", "auto_box": "Automatic Optimization (Only from list)",
         "btn_calc": "Calculate & Generate Report", "summary": "Summary", "pals": "Pallets", "weight": "Weight",
-        "meters": "Loading Meters", "num_trucks": "Trucks Needed", "btn_pdf": "📄 Download PDF Report", "warn_orders": "Add orders first!"
+        "meters": "Loading Meters", "num_trucks": "Trucks Needed", "btn_pdf": "📄 Download PDF Report", "warn_orders": "Add orders first!",
+        "no_box": "NO SUITABLE BOX FOUND IN LIST"
     },
     "DE": {
         "nav_templates": "📁 Vorlagen", "nav_orders": "📑 Bestellungen", "nav_calc": "🚛 Paletten/LKW Berechnung",
         "header_storage": "🗄️ Online-Dateiverwaltung", "info_storage": "Laden Sie hier Ihre vollständige Konfiguration herunter, um sie später wieder zu laden.",
         "btn_download": "💾 Aktuelle Vorlage herunterladen", "btn_upload": "📂 Laden", "master_data": "📦 Stammdaten",
         "boxes": "🎁 Kartons (CM)", "pallets": "🟫 Paletten (CM)", "trucks": "🚛 Eigene LKW", "order_mgmt": "📝 Auftragsverwaltung",
-        "transport": "Transport", "pallet": "Palette", "box": "Karton", "auto_box": "Automatisch optimieren",
+        "transport": "Transport", "pallet": "Palette", "box": "Karton", "auto_box": "Automatisch optimieren (Nur aus Liste)",
         "btn_calc": "Berechnen & Bericht erstellen", "summary": "Zusammenfassung", "pals": "Paletten", "weight": "Gewicht",
-        "meters": "Lademeter", "num_trucks": "LKWs benötigt", "btn_pdf": "📄 PDF-Bericht herunterladen", "warn_orders": "Zuerst Bestellungen hinzufügen!"
+        "meters": "Lademeter", "num_trucks": "LKWs benötigt", "btn_pdf": "📄 PDF-Bericht herunterladen", "warn_orders": "Zuerst Bestellungen hinzufügen!",
+        "no_box": "KEIN PASSENDER KARTON IN DER LISTE GEFUNDEN"
     },
     "PL": {
         "nav_templates": "📁 Szablony", "nav_orders": "📑 Zamówienia", "nav_calc": "🚛 Kalkulacja palet/ciężarówek",
         "header_storage": "🗄️ Zarządzanie plikami online", "info_storage": "Pobierz pełną konfigurację tutaj, aby załadować ją później.",
         "btn_download": "💾 Pobierz bieżący szablon", "btn_upload": "📂 Załaduj", "master_data": "📦 Dane podstawowe",
         "boxes": "🎁 Pudełka (CM)", "pallets": "🟫 Palety (CM)", "trucks": "🚛 Niestandardowe ciężarówki", "order_mgmt": "📝 Zarządzanie zamówieniami",
-        "transport": "Transport", "pallet": "Paleta", "box": "Pudełko", "auto_box": "Automatyczna optymalizacja",
+        "transport": "Transport", "pallet": "Paleta", "box": "Pudełko", "auto_box": "Automatyczna optymalizacja (tylko z listy)",
         "btn_calc": "Oblicz i wygeneruj raport", "summary": "Podsumowanie", "pals": "Palety", "weight": "Waga",
-        "meters": "Metry ładunkowe", "num_trucks": "Potrzebne ciężarówki", "btn_pdf": "📄 Pobierz raport PDF", "warn_orders": "Najpierw dodaj zamówienia!"
+        "meters": "Metry ładunkowe", "num_trucks": "Potrzebne ciężarówki", "btn_pdf": "📄 Pobierz raport PDF", "warn_orders": "Najpierw dodaj zamówienia!",
+        "no_box": "NIE ZNALEZIONO PASUJĄCEGO PUDEŁKA NA LIŚCIE"
     }
 }
 
-# Sidebar taal selectie
 st.sidebar.title("Language / Taal")
 lang_choice = st.sidebar.selectbox("Select Language", ["NL", "EN", "DE", "PL"])
 T = LANGS[lang_choice]
-
-st.markdown("""<style>.stApp > header { display: none; } h1 { text-align: center; color: #007AA3; }</style>""", unsafe_allow_html=True)
 
 # =========================================================
 # 2. INITIALISATIE
@@ -92,7 +92,7 @@ for key, cols in [("master_data_df", MASTER_COLS), ("boxes_df", BOXES_COLS), ("p
     if key not in st.session_state: st.session_state[key] = enforce_dtypes(None, cols)
 
 # =========================================================
-# 3. FUNCTIES (PDF, EXPORT, CALC)
+# 3. REKENLOGICA (STRIKT)
 # =========================================================
 def export_config():
     output = io.BytesIO()
@@ -104,20 +104,25 @@ def export_config():
         st.session_state.custom_trucks_df.to_excel(writer, sheet_name="Trucks", index=False)
     return output.getvalue()
 
-def bepaal_optimale_doos(groep_items, dozen_df):
-    if dozen_df.empty: return "Standard", 0.0
+def bepaal_optimale_doos_strikt(groep_items, dozen_df):
+    if dozen_df.empty: return T["no_box"], 0.0
     vol_nodig = (groep_items['Lengte'] * groep_items['Breedte'] * groep_items['Hoogte'] * groep_items['Aantal']).sum() * 1.15
     dozen = dozen_df.copy()
     dozen['vol'] = dozen['Lengte'] * dozen['Breedte'] * dozen['Hoogte']
     dozen = dozen.sort_values('vol')
+    
     for _, d in dozen.iterrows():
-        if d['vol'] >= vol_nodig: return d['Naam'], d['Gewicht']
-    return "XL Box", 0.0
+        if d['vol'] >= vol_nodig:
+            # Check of het grootste item fysiek in de doos past
+            if groep_items['Lengte'].max() <= d['Lengte'] and groep_items['Breedte'].max() <= d['Breedte'] and groep_items['Hoogte'].max() <= d['Hoogte']:
+                return d['Naam'], d['Gewicht']
+    return T["no_box"], 0.0
 
 def calc_planning(df_full, p_row, t_dims, box_weights):
     T_L = t_dims['Lengte'] * 100 if t_dims['Lengte'] < 100 else t_dims['Lengte']
     T_W = t_dims['Breedte'] * 100 if t_dims['Breedte'] < 100 else t_dims['Breedte']
     T_MAX_KG = t_dims['MaxGewicht']
+    
     total_pals, total_kg = 0, 0
     for nr, group in df_full.groupby('OrderNr'):
         bw = box_weights.get(nr, 0)
@@ -126,6 +131,7 @@ def calc_planning(df_full, p_row, t_dims, box_weights):
             lagen = max(1, int((p_row['MaxHoogte'] - p_row['PalletHoogte']) // r['Hoogte']))
             total_pals += math.ceil(r['Aantal'] / (fit * lagen))
             total_kg += (r['Aantal'] * (r['Gewicht'] + bw))
+    
     total_kg += (total_pals * p_row['Gewicht'])
     rijen = math.ceil(total_pals / max(1, int(T_W // p_row['Breedte'])))
     lm = (rijen * p_row['Lengte']) / 100
@@ -151,6 +157,7 @@ if page == T["nav_templates"]:
             st.session_state.boxes_df = enforce_dtypes(pd.read_excel(xls, "Boxes"), BOXES_COLS)
             st.session_state.pallets_df = enforce_dtypes(pd.read_excel(xls, "Pallets"), PALLETS_COLS)
             st.session_state.orders_df = enforce_dtypes(pd.read_excel(xls, "Orders"), ORDERS_COLS)
+            if "Trucks" in xls.sheet_names: st.session_state.custom_trucks_df = enforce_dtypes(pd.read_excel(xls, "Trucks"), TRUCK_CUSTOM_COLS)
             st.rerun()
 
     st.subheader(T["master_data"])
@@ -169,6 +176,7 @@ elif page == T["nav_orders"]:
 elif page == T["nav_calc"]:
     st.header(T["nav_calc"])
     if st.session_state.orders_df.empty: st.warning(T["warn_orders"]); st.stop()
+    if st.session_state.pallets_df.empty: st.error("No Pallets defined in Templates!"); st.stop()
     
     with st.container(border=True):
         c1, c2, c3 = st.columns(3)
@@ -180,17 +188,23 @@ elif page == T["nav_calc"]:
     if st.button(T["btn_calc"]):
         df_f = st.session_state.orders_df.merge(st.session_state.master_data_df, on="ItemNr")
         box_weights, advies = {}, []
+        
         for nr, grp in df_f.groupby('OrderNr'):
-            if box_opt == T["auto_box"]: n, w = bepaal_optimale_doos(grp, st.session_state.boxes_df)
+            if box_opt == T["auto_box"]:
+                n, w = bepaal_optimale_doos_strikt(grp, st.session_state.boxes_df)
             else: 
                 row = st.session_state.boxes_df[st.session_state.boxes_df['Naam']==box_opt]
-                n, w = (row['Naam'].values[0], row['Gewicht'].values[0]) if not row.empty else ("Manual", 0.0)
+                n, w = (row['Naam'].values[0], row['Gewicht'].values[0]) if not row.empty else (T["no_box"], 0.0)
+            
             box_weights[nr] = w
-            advies.append({"Order": nr, "Box": n, "Weight": w})
+            advies.append({"Order": nr, "Box": n, "Box Weight": w})
         
         st.dataframe(pd.DataFrame(advies), hide_index=True)
+        
+        # Check of er een truck en pallet is geselecteerd
         t_dims = TRANSPORT_DIMENSIONS[sel_t] if sel_t in TRANSPORT_DIMENSIONS else st.session_state.custom_trucks_df[st.session_state.custom_trucks_df['Naam']==sel_t].iloc[0].to_dict()
         p_row = st.session_state.pallets_df[st.session_state.pallets_df['Naam']==sel_p].iloc[0]
+        
         pals, kg, lm, num_t = calc_planning(df_f, p_row, t_dims, box_weights)
         
         res = st.columns(4)
