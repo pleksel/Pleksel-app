@@ -145,31 +145,6 @@ st.session_state.opt_stack = st.sidebar.toggle(
 st.session_state.opt_orient = st.sidebar.toggle(
     L['orient'], value=st.session_state.get("opt_orient", True)
 )
-st.sidebar.subheader("Trailer Afmetingen")
-
-st.session_state.trailer_length = st.sidebar.number_input(
-    "Trailer lengte (cm)",
-    min_value=600,
-    max_value=2000,
-    value=1360,
-    step=10
-)
-
-st.session_state.trailer_width = st.sidebar.number_input(
-    "Trailer breedte (cm)",
-    min_value=200,
-    max_value=300,
-    value=245,
-    step=5
-)
-
-st.session_state.trailer_height = st.sidebar.number_input(
-    "Trailer hoogte (cm)",
-    min_value=200,
-    max_value=350,
-    value=270,
-    step=5
-)
 
 st.sidebar.divider()
 
@@ -433,6 +408,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
