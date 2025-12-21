@@ -114,55 +114,44 @@ if uploaded_file:
     except Exception as e:
         st.sidebar.error(f"Check tabblad namen: {e}")
 # =========================================================
-# 4. REKEN ENGINE (ROBUUSTE VERSIE)
+# 4. 3D LOGICA (EFFICIËNT LADEN & STATS)
 # =========================================================
-def calculate_real_metrics():
-    # Check of er wel data in beide cruciale tabellen zit
-    if st.session_state.df_orders.empty or st.session_state.df_items.empty:
-        return 0, 0, 0, 0, 0, []
+def draw_trailer_3d(l, b, h, pallets=[]):
+    fig = go.Figure()
+    # Vloer (Grijs)
+    fig.add_trace(go.Mesh3d(x=[0, l, l, 0, 0, l, l, 0], y=[0, 0, b, b, 0, 0, b, b], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.3))
     
-    # Maak kopieën om mee te werken
-    orders = st.session_state.df_orders.copy()
-    items = st.session_state.df_items.copy()
-    
-    # Zorg dat ItemNr in beide tabellen als string wordt gelezen (voorkomt 101 vs "101" fouten)
-    orders['ItemNr'] = orders['ItemNr'].astype(str)
-    items['ItemNr'] = items['ItemNr'].astype(str)
-    
-    # Koppel data
-    merged = pd.merge(orders, items, on="ItemNr", how="inner")
-    
-    if merged.empty:
-        return 0, 0, 0, 0, 0, []
-
-    pallets_to_draw = []
     current_x = 0
+    current_y = 0
+    max_x_of_row = 0
     
-    for _, row in merged.iterrows():
-        try:
-            aantal = int(row['Aantal'])
-            # Gebruik de exact kolomnamen uit je template
-            l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
-            kg = float(row['Kg'])
+    pallet_colors = ['#00f2ff', '#7000ff', '#ff0070', '#38bdf8']
+
+    for i, p in enumerate(pallets):
+        pl, pb, ph = p['dim']
+        
+        # Efficiëntie: Check of pallet nog naast de andere past in de breedte (245cm)
+        if current_y + pb > b:
+            current_x += max_x_of_row + 5 # Verschuif X naar volgende blok
+            current_y = 0
+            max_x_of_row = 0
             
-            for i in range(aantal):
-                pallets_to_draw.append({
-                    'id': f"{row['ItemNr']}_{i}",
-                    'dim': [l, b, h],
-                    'pos': [current_x, 0, 0],
-                    'weight': kg
-                })
-                current_x += l + 5
-        except (ValueError, KeyError):
-            continue
-    
-    total_w = sum(p['weight'] for p in pallets_to_draw)
-    total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in pallets_to_draw)
-    num_pal = len(pallets_to_draw)
-    lm = round(current_x / 100, 2)
-    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
-    
-    return total_w, round(total_v, 2), num_pal, trucks, lm, pallets_to_draw
+        px, py, pz = current_x, current_y, p['pos'][2]
+        max_x_of_row = max(max_x_of_row, pl)
+        
+        fig.add_trace(go.Mesh3d(
+            x=[px, px+pl, px+pl, px, px, px+pl, px+pl, px],
+            y=[py, py, py+pb, py+pb, py, py, py+pb, py+pb],
+            z=[pz, pz, pz, pz, pz+ph, pz+ph, pz+ph, pz+ph],
+            i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
+            color=pallet_colors[i % len(pallet_colors)], opacity=0.8, name=f"Order {p['order']}"
+        ))
+        
+        current_y += pb + 5 
+
+    lm = round((current_x + max_x_of_row) / 100, 2)
+    fig.update_layout(scene=dict(aspectmode='data', xaxis_title="Lengte (cm)", yaxis_title="Breedte (cm)"), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
+    return fig, lm
 
 
 # =========================================================
@@ -221,6 +210,7 @@ with tab_calc:
         margin=dict(l=0,r=0,b=0,t=0)
     )
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
