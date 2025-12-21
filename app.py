@@ -1,140 +1,146 @@
 import streamlit as st
 import pandas as pd
-import io, os
+import io
 
 # =========================================================
-# 1. THE GAME ENGINE UI (CONTRAST & SIMULATOR LOOK)
+# 1. THE SIMULATOR ENGINE - UI & CONTRAST FIX
 # =========================================================
 st.set_page_config(page_title="TRUCK SIMULATOR PRO", page_icon="🚛", layout="wide")
 
-def apply_simulator_theme():
+def apply_pro_simulator_theme():
     st.markdown("""
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Rajdhani:wght@500;600&display=swap');
 
-        /* Dashboard Achtergrond */
+        /* Achtergrond van de hele app */
         .stApp {
-            background-color: #0a0e14;
-            background-image: 
-                linear-gradient(rgba(0, 255, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 255, 255, 0.05) 1px, transparent 1px);
-            background-size: 30px 30px;
+            background-color: #05070a;
             color: #ffffff;
             font-family: 'Rajdhani', sans-serif;
         }
 
-        /* Tekst beter zichtbaar maken */
-        p, span, label, .stMarkdown {
-            color: #ffffff !important;
-            font-weight: 500;
-            font-size: 1.1rem;
+        /* SIDEBAR FIX: Donkere achtergrond met Neon Groene tekst */
+        section[data-testid="stSidebar"] {
+            background-color: #0c1117 !important;
+            border-right: 2px solid #00ff41;
+        }
+        
+        section[data-testid="stSidebar"] .stMarkdown, 
+        section[data-testid="stSidebar"] label,
+        section[data-testid="stSidebar"] span {
+            color: #00ff41 !important; /* Klassieke Terminal Groen */
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.9rem;
+            font-weight: bold;
         }
 
-        /* Glazen Containers met felle randen */
-        div[data-testid="stMetric"], .stContainer, .stDataEditor {
-            background: rgba(16, 22, 32, 0.9) !important;
-            border: 2px solid #38bdf8 !important;
-            border-radius: 10px !important;
-            box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+        /* Tekst in het middenvlak (beter zichtbaar) */
+        h1, h2, h3 {
+            font-family: 'Orbitron', sans-serif !important;
+            color: #38bdf8 !important;
+            text-shadow: 0 0 10px rgba(56, 189, 248, 0.5);
         }
 
-        /* Simulator Knoppen (Neon Oranje/Geel) */
-        div.stButton > button {
-            background: #f59e0b !important;
-            color: #000000 !important;
-            border: none !important;
-            font-weight: 800 !important;
-            text-transform: uppercase;
-            box-shadow: 0 0 10px #f59e0b;
-        }
-
-        /* Truck Icon Header */
-        .truck-header {
-            text-align: center;
+        /* Doorbreken van de Excel-look: Kaarten in plaats van alleen rijen */
+        .data-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid #38bdf8;
+            border-radius: 10px;
             padding: 20px;
-            background: linear-gradient(90deg, transparent, #38bdf8, transparent);
-            margin-bottom: 20px;
+            margin-bottom: 15px;
+            box-shadow: inset 0 0 15px rgba(56, 189, 248, 0.1);
+        }
+
+        /* Knoppen: "Industrial" look */
+        div.stButton > button {
+            background: #ffaa00 !important;
+            color: #000000 !important;
+            border: 2px solid #cc8800 !important;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold;
+            letter-spacing: 2px;
+            width: 100%;
+        }
+
+        /* Styling voor de tabellen om ze minder 'Excel' te maken */
+        .stDataEditor {
+            background-color: #0c1117 !important;
+            border: 1px solid #334155 !important;
         }
     </style>
     """, unsafe_allow_html=True)
 
-apply_simulator_theme()
+apply_pro_simulator_theme()
 
 # =========================================================
-# 2. LOGICA & DATA INITIALISATIE
+# 2. DATA INITIALISATIE
 # =========================================================
-if 'master_data_df' not in st.session_state:
-    st.session_state.master_data_df = pd.DataFrame(columns=["ItemNr", "Lengte", "Breedte", "Hoogte", "Gewicht"])
-if 'boxes_df' not in st.session_state:
-    st.session_state.boxes_df = pd.DataFrame(columns=["Naam", "Lengte", "Breedte", "Hoogte"])
-if 'pallets_df' not in st.session_state:
-    st.session_state.pallets_df = pd.DataFrame(columns=["Type", "L", "B", "MaxH"])
+for key in ['master_data_df', 'boxes_df', 'pallets_df', 'trucks_df']:
+    if key not in st.session_state:
+        st.session_state[key] = pd.DataFrame()
 
 # =========================================================
-# 3. GAME INTERFACE (DE TRUCK)
+# 3. ZIJBALK (CONTROL PANEL) - NU GOED LEESBAAR
 # =========================================================
-
-# Geen logo, maar een "game-achtige truck" visual
-st.markdown("<div class='truck-header'><h1>🚛 TRUCK CALCULATION ENGINE v2.1</h1></div>", unsafe_allow_html=True)
-
-# Sidebar voor instellingen
-st.sidebar.header("🕹️ DASHBOARD CONTROLS")
-mode = st.sidebar.selectbox("SELECT MODULE", ["DATA INPUT", "ORDER PLANNING", "FLEET MGMT"])
-
-# =========================================================
-# 4. FUNCTIES & SCHERMEN
-# =========================================================
-
-if mode == "DATA INPUT":
-    st.subheader("📁 SYSTEM TEMPLATES & UPLOADS")
-    
-    col_up, col_down = st.columns(2)
-    with col_up:
-        # Hier is de upload functie terug
-        uploaded_file = st.file_uploader("UPLOAD EXCEL MANIFEST", type=["xlsx"])
-        if uploaded_file:
-            st.success("MANIFEST GELADEN")
-            # Logica voor verwerking zou hier komen
-            
-    with col_down:
-        st.info("DOWNLOAD SYSTEEM TEMPLATE")
-        st.button("GENERATE .XLSX TEMPLATE")
-
+with st.sidebar:
+    st.markdown("## 📟 COMMAND CENTER")
     st.divider()
+    menu = st.radio("SELECT MISSION", ["🚀 CARGO DASHBOARD", "📁 DATABASE", "🚛 FLEET MGMT"])
+    
+    st.divider()
+    st.markdown("### 🛠️ ENGINE SETTINGS")
+    st.toggle("Stapelbaar", value=True)
+    st.toggle("Gezamenlijke Orders", value=False)
+    st.slider("Max Load %", 0, 100, 95)
+    
+    st.sidebar.markdown("---")
+    st.sidebar.caption("SYSTEM STATUS: ONLINE")
 
-    # De data editors (met beter zichtbare tekst)
-    st.markdown("### 📦 ARTIKEL MASTER DATA")
-    st.session_state.master_data_df = st.data_editor(
-        st.session_state.master_data_df, 
-        num_rows="dynamic", 
-        use_container_width=True,
-        key="editor_master"
-    )
+# =========================================================
+# 4. HOOFDSCHERMEN
+# =========================================================
 
-    c1, c2 = st.columns(2)
+if menu == "🚀 CARGO DASHBOARD":
+    st.title("🚛 TRUCK SIMULATOR ENGINE")
+    
+    # HUD Display (Snel overzicht)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("AVAILABLE PAYLOAD", "24,000 kg", "Ready")
+    with col2:
+        st.metric("CARGO VOLUME", "86 m³", "Optimaal")
+    with col3:
+        st.metric("TRUCK EFFICIENCY", "92%", "High")
+
+    st.markdown("---")
+
+    # Actie sectie
+    c1, c2 = st.columns([2, 1])
     with c1:
-        st.markdown("### 🎁 DOOS CONFIGURATIE")
-        st.session_state.boxes_df = st.data_editor(st.session_state.boxes_df, num_rows="dynamic", use_container_width=True)
+        st.markdown("<div class='data-card'><h3>📦 ACTIVE CARGO LIST</h3>", unsafe_allow_html=True)
+        # Upload functie prominent aanwezig
+        up = st.file_uploader("Sleep Excel manifest hierheen", type=["xlsx"])
+        st.session_state.master_data_df = st.data_editor(st.session_state.master_data_df, num_rows="dynamic", use_container_width=True, key="main_ed")
+        st.markdown("</div>", unsafe_allow_html=True)
+
     with c2:
-        st.markdown("### 🟫 PALLET TYPES")
+        st.markdown("<div class='data-card'><h3>🎮 ACTIONS</h3>", unsafe_allow_html=True)
+        if st.button("RUN SIMULATION"):
+            st.balloons()
+        st.button("EXPORT LOADING PLAN (PDF)")
+        st.button("GENERATE EMPTY TEMPLATE")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+elif menu == "📁 DATABASE":
+    st.title("🗄️ MASTER DATA STORAGE")
+    
+    tab1, tab2 = st.tabs(["🎁 BOX TYPES", "🟫 PALLET SPECS"])
+    with tab1:
+        st.session_state.boxes_df = st.data_editor(st.session_state.boxes_df, num_rows="dynamic", use_container_width=True)
+    with tab2:
         st.session_state.pallets_df = st.data_editor(st.session_state.pallets_df, num_rows="dynamic", use_container_width=True)
 
-elif mode == "ORDER PLANNING":
-    st.subheader("🚛 CARGO OPTIMIZATION")
-    
-    # Game-achtige HUD voor statistieken
-    h1, h2, h3 = st.columns(3)
-    h1.metric("AVAILABLE SPACE", "94%", delta="2.4m")
-    h2.metric("TOTAL WEIGHT", "14.500 KG", delta="-500 KG")
-    h3.metric("EFFICIENCY SCORE", "98/100")
-
-    st.button("🚀 START BEREKENING (RUN SIMULATION)")
-    
-    # Placeholder voor de truck visualisatie
-    st.image("https://img.icons8.com/clouds/500/semi-truck.png", width=300) # Een gestileerde truck icon
-    st.write("Wacht op data invoer voor visualisatie...")
-
-# Footer informatie
-st.sidebar.markdown("---")
-st.sidebar.markdown("**STATUS:** 🟢 SYSTEM ONLINE")
-st.sidebar.markdown("**USER:** OPERATOR_01")
+elif menu == "🚛 FLEET MGMT":
+    st.title("🚛 VLOOT CONFIGURATIE")
+    st.info("Beheer hier de afmetingen van je vrachtwagens en containers.")
+    st.session_state.trucks_df = st.data_editor(st.session_state.trucks_df, num_rows="dynamic", use_container_width=True)
