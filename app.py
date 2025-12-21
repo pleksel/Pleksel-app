@@ -245,7 +245,7 @@ def calculate_metrics():
 
 
 
-    positioned_units = []
+  positioned_units = []
 
 curr_x = 0          # Lengte richting trailer
 curr_y = 0          # Breedte richting trailer
@@ -287,14 +287,6 @@ while i < len(units_to_load):
 
     i += 1
 
-
-        
-
-        # Oriëntatie logica
-
-        if opt_orient and l > b:
-
-            l, b = b, l 
 
 
 
@@ -510,6 +502,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
