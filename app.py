@@ -1,54 +1,28 @@
-import streamlit as st
-
 import pandas as pd
-
 import numpy as np
-
 import plotly.graph_objects as go
-
 from fpdf import FPDF
-
 import io
-
-
+import streamlit as st  # Deze ontbrak
 
 # =========================================================
-
 # 1. UI & THEME
-
 # =========================================================
-
 st.set_page_config(page_title="PLEKSEL TRAILER ENGINE", layout="wide")
 
-
-
 def apply_ui_theme():
-
     st.markdown("""
-
     <style>
-
         .stApp { background-color: #020408; color: #e2e8f0; }
-
         section[data-testid="stSidebar"] { background-color: #000000 !important; border-right: 1px solid #38bdf8; }
-
         .table-header { color: #38bdf8; font-weight: bold; border-bottom: 2px solid #38bdf8; padding: 5px 0; margin-top: 20px; margin-bottom: 10px; }
-
         div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; border-radius: 4px; }
-
         .metric-card { background: #111827; border: 1px solid #38bdf8; padding: 15px; border-radius: 8px; text-align: center; }
-
         .metric-val { color: #38bdf8; font-size: 24px; font-weight: bold; }
-
     </style>
-
     """, unsafe_allow_html=True)
 
-
-
 apply_ui_theme()
-
-
 
 # =========================================================
 # 2. TAAL & INITIALISATIE (FIX VOOR ATTRIBUTE ERROR)
@@ -246,4 +220,5 @@ with tab_calc:
         margin=dict(l=0,r=0,b=0,t=0)
     )
     st.plotly_chart(fig, use_container_width=True)
+
 
