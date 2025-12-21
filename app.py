@@ -247,19 +247,46 @@ def calculate_metrics():
 
     positioned_units = []
 
-    curr_x = 0
+curr_x = 0          # Lengte richting trailer
+curr_y = 0          # Breedte richting trailer
+row_depth = 0       # Grootste lengte in huidige rij
+i = 0
 
-    i = 0
+MAX_WIDTH = 245     # Trailer breedte (cm)
+SPACING = 2
+max_h = 250
 
-    max_h = 250 
+while i < len(units_to_load):
+    u = units_to_load[i]
+    l, b, h = u['dim']
 
+    # Oriëntatie
+    if opt_orient and l > b:
+        l, b = b, l
 
+    # Past hij nog in de breedte?
+    if curr_y + b > MAX_WIDTH:
+        # Nieuwe rij in lengte
+        curr_x += row_depth + SPACING
+        curr_y = 0
+        row_depth = 0
 
-    while i < len(units_to_load):
+    # Plaats unit
+    positioned_units.append({
+        'id': u['id'],
+        'dim': [l, b, h],
+        'pos': [curr_x, curr_y, 0],
+        'pz': 0,
+        'weight': u['weight'],
+        'stackable': u['stackable']
+    })
 
-        u = units_to_load[i]
+    # Update rij info
+    curr_y += b + SPACING
+    row_depth = max(row_depth, l)
 
-        l, b, h = u['dim']
+    i += 1
+
 
         
 
@@ -483,6 +510,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
