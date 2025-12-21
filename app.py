@@ -170,4 +170,19 @@ with tab_data:
         st.markdown(f"<div class='table-title'>{T['header_trucks']}</div>", unsafe_allow_html=True)
         st.session_state.trucks_df = st.data_editor(
             st.session_state.trucks_df, 
-            num_rows="dynamic",
+            num_rows="dynamic", 
+            key="editor_trucks", 
+            use_container_width=True
+        )
+        
+        st.write("")
+        if st.button(T["btn_calc"]):
+            st.toast("Berekening in uitvoering...", icon="🚛")
+
+with tab_results:
+    st.subheader("Transport Analyse")
+    st.info("Vul de gegevens in op het eerste tabblad en start de berekening.")
+
+# Sidebar status
+st.sidebar.markdown("---")
+st.sidebar.caption("Systeem Status: Operationeel")
