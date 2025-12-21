@@ -277,8 +277,9 @@ def calculate_metrics():
         positioned_units
     )
 
-    )
+    
 
+    
 
     # === Trailer instellingen ophalen (STAP 2) ===
     TRAILER_L = st.session_state.get("trailer_length", 1360)
@@ -520,6 +521,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
