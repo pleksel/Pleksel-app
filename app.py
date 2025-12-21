@@ -345,7 +345,8 @@ with tab_calc:
             ))
 
         # Trailer visualisatie instellingen
-        trailer_len = max(res_lm * 100, 1360)
+        trailer_len = 1360
+
         fig.update_layout(
             scene=dict(
                 xaxis=dict(title='Lengte (cm)', range=[0, trailer_len], backgroundcolor="#0f172a"),
@@ -407,6 +408,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
