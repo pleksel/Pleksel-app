@@ -114,39 +114,47 @@ if uploaded_file:
     except Exception as e:
         st.sidebar.error(f"Check tabblad namen: {e}")
 # =========================================================
-# 4. REKEN ENGINE (GEKOPPELD AAN DATA & VIEWER)
+# 4. REKEN ENGINE (ROBUUSTE VERSIE)
 # =========================================================
 def calculate_real_metrics():
-    # Controleer of er data is, anders return leegte
+    # Check of er wel data in beide cruciale tabellen zit
     if st.session_state.df_orders.empty or st.session_state.df_items.empty:
         return 0, 0, 0, 0, 0, []
     
-    # Koppel Order aan Item Data op basis van ItemNr
-    merged = pd.merge(st.session_state.df_orders, st.session_state.df_items, on="ItemNr", how="left")
+    # Maak kopieën om mee te werken
+    orders = st.session_state.df_orders.copy()
+    items = st.session_state.df_items.copy()
     
+    # Zorg dat ItemNr in beide tabellen als string wordt gelezen (voorkomt 101 vs "101" fouten)
+    orders['ItemNr'] = orders['ItemNr'].astype(str)
+    items['ItemNr'] = items['ItemNr'].astype(str)
+    
+    # Koppel data
+    merged = pd.merge(orders, items, on="ItemNr", how="inner")
+    
+    if merged.empty:
+        return 0, 0, 0, 0, 0, []
+
     pallets_to_draw = []
     current_x = 0
     
-    # Maak voor elk item in de order een 3D-blokje aan
-    for idx, row in merged.iterrows():
-        # Controleer of de benodigde kolommen bestaan
+    for _, row in merged.iterrows():
         try:
             aantal = int(row['Aantal'])
-            l = float(row['L_cm'])
-            b = float(row['B_cm'])
-            h = float(row['H_cm'])
+            # Gebruik de exact kolomnamen uit je template
+            l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
             kg = float(row['Kg'])
-        except:
+            
+            for i in range(aantal):
+                pallets_to_draw.append({
+                    'id': f"{row['ItemNr']}_{i}",
+                    'dim': [l, b, h],
+                    'pos': [current_x, 0, 0],
+                    'weight': kg
+                })
+                current_x += l + 5
+        except (ValueError, KeyError):
             continue
-
-        for i in range(aantal):
-            pallets_to_draw.append({
-                'id': f"{row['ItemNr']}_{idx}_{i}",
-                'dim': [l, b, h],
-                'pos': [current_x, 0, 0], # Simpele plaatsing achter elkaar
-                'weight': kg
-            })
-            current_x += l + 2  # 2cm tussenruimte
     
     total_w = sum(p['weight'] for p in pallets_to_draw)
     total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in pallets_to_draw)
@@ -213,5 +221,6 @@ with tab_calc:
         margin=dict(l=0,r=0,b=0,t=0)
     )
     st.plotly_chart(fig, use_container_width=True)
+
 
 
