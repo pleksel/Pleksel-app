@@ -187,7 +187,11 @@ if uploaded_file:
 
 def calculate_metrics():
 
-    orders = st.session_state.get('df_orders', pd.DataFrame())
+    orders = st.session_state.get(
+    'df_orders_calc',
+    st.session_state.get('df_orders', pd.DataFrame())
+)
+
     items = st.session_state.get('df_items', pd.DataFrame())
 
     opt_stack = st.session_state.get('opt_stack', True)
@@ -484,6 +488,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
