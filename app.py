@@ -339,6 +339,19 @@ with tab_calc:
             "Selecteer orders",
             orders_df["OrderNr"].unique()
         )
+    # --- Orders filteren ---
+    if order_mode == "Alle orders":
+        st.session_state.df_orders_calc = orders_df.copy()
+
+    elif order_mode == "Eén order":
+        st.session_state.df_orders_calc = orders_df[
+            orders_df["OrderNr"] == selected_orders
+        ]
+
+    elif order_mode == "Meerdere orders":
+        st.session_state.df_orders_calc = orders_df[
+            orders_df["OrderNr"].isin(selected_orders)
+        ]
 
     # Dashboard Metrics
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -471,6 +484,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
