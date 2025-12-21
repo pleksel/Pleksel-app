@@ -253,7 +253,12 @@ def calculate_metrics():
     total_w = sum(p['weight'] for p in positioned_units)
     total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
 
-    lm = round((curr_x + row_depth) / 100, 2)
+    # === Trailer instellingen ophalen (STAP 2) ===
+TRAILER_L = st.session_state.get("trailer_length", 1360)
+
+used_length = min(curr_x, TRAILER_L)
+lm = round(used_length / 100, 2)
+
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
     return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
@@ -417,6 +422,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
