@@ -51,69 +51,35 @@ apply_ui_theme()
 
 
 # =========================================================
-
-# 2. TAAL & INITIALISATIE
-
+# 2. TAAL & INITIALISATIE (FIX VOOR ATTRIBUTE ERROR)
 # =========================================================
+if 'lang' not in st.session_state: 
+    st.session_state.lang = 'NL'
 
-if 'lang' not in st.session_state: st.session_state.lang = 'NL'
+# Zorg dat de dataframes altijd bestaan voordat de rest van de app start
+if 'df_items' not in st.session_state:
+    st.session_state.df_items = pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"])
 
+if 'df_boxes' not in st.session_state:
+    st.session_state.df_boxes = pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"])
 
+if 'df_pallets' not in st.session_state:
+    st.session_state.df_pallets = pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"])
+
+if 'df_orders' not in st.session_state:
+    st.session_state.df_orders = pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"])
 
 T = {
-
     'NL': {
-
         'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen", 
-
         'orient': "Lang/Breed laden", 'data_tab': "01: DATA INVOER", 'calc_tab': "02: PLANNING",
-
-        'master': "Master Data", 'order': "Order Lijst", 'boxes': "Dozen", 'pallets': "Pallet Types", 
-
-        'truck': "Truck/Container", 'download': "Download Template", 'upload': "Upload Template",
-
-        'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 'stats_pal': "Aantal Pallets",
-
-        'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
-
-    },
-
-    'EN': {
-
-        'settings': "Trailer Settings", 'mix': "Mix Boxes", 'stack': "Stack Pallets", 
-
-        'orient': "Long/Wide Loading", 'data_tab': "01: DATA ENTRY", 'calc_tab': "02: PLANNING",
-
-        'master': "Master Data", 'order': "Order List", 'boxes': "Boxes", 'pallets': "Pallet Types", 
-
-        'truck': "Truck/Container", 'download': "Download Template", 'upload': "Upload Template",
-
-        'stats_weight': "Total Weight", 'stats_vol': "Total Volume", 'stats_pal': "Pallet Count",
-
-        'stats_trucks': "Truck Count", 'stats_lm': "Loading Meters"
-
-    },
-
-    'DE': {
-
-        'settings': "Trailer-Einstellungen", 'mix': "Mix-Boxen", 'stack': "Paletten stapeln", 
-
-        'orient': "Längs-/Querladen", 'data_tab': "01: DATENEINGABE", 'calc_tab': "02: PLANUNG",
-
-        'master': "Stammdaten", 'order': "Bestellliste", 'boxes': "Boxen", 'pallets': "Palettentypen", 
-
-        'truck': "LKW/Container", 'download': "Vorlage laden", 'upload': "Vorlage hochladen",
-
-        'stats_weight': "Gesamtgewicht", 'stats_vol': "Gesamtvolumen", 'stats_pal': "Anzahl Paletten",
-
-        'stats_trucks': "Anzahl LKWs", 'stats_lm': "Lademeter"
-
+        'item_data': "Item Data", 'box_data': "Box Data", 'pallet_data': "Pallet Data",
+        'order_data': "Order Data", 'truck': "Truck/Container", 'download': "Download Template", 
+        'upload': "Upload Template", 'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 
+        'stats_pal': "Aantal Pallets", 'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
     }
-
 }
-
 L = T[st.session_state.lang]
-
 
 
 # =========================================================
@@ -256,3 +222,4 @@ with tab_calc:
         margin=dict(l=0,r=0,b=0,t=0)
     )
     st.plotly_chart(fig, use_container_width=True)
+
