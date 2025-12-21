@@ -453,9 +453,41 @@ with tab_calc:
             ))
 
         # Trailer visualisatie instellingen
-    trailer_len = st.session_state.get("trailer_length", 1360)
-trailer_w   = st.session_state.get("trailer_width", 245)
-trailer_h   = st.session_state.get("trailer_height", 270)
+              # Trailer visualisatie instellingen
+        trailer_len = st.session_state.get("trailer_length", 1360)
+        trailer_w   = st.session_state.get("trailer_width", 245)
+        trailer_h   = st.session_state.get("trailer_height", 270)
+
+        fig.update_layout(
+            scene=dict(
+                xaxis=dict(
+                    title="Lengte (cm)",
+                    range=[0, trailer_len],
+                    backgroundcolor="#0f172a"
+                ),
+                yaxis=dict(
+                    title="Breedte (cm)",
+                    range=[0, trailer_w],
+                    backgroundcolor="#0f172a"
+                ),
+                zaxis=dict(
+                    title="Hoogte (cm)",
+                    range=[0, trailer_h],
+                    backgroundcolor="#0f172a"
+                ),
+                aspectmode="manual",
+                aspectratio=dict(
+                    x=trailer_len / trailer_w,
+                    y=1,
+                    z=trailer_h / trailer_w
+                )
+            ),
+            paper_bgcolor="rgba(0,0,0,0)",
+            margin=dict(l=0, r=0, b=0, t=0),
+            showlegend=False
+        )
+
+
 
 
         fig.update_layout(
@@ -524,6 +556,7 @@ trailer_h   = st.session_state.get("trailer_height", 270)
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
