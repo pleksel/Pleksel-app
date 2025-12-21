@@ -357,27 +357,57 @@ def calculate_metrics():
 
 
 # =========================================================
-    # 5. UI TABS (VERVOLG - SECTOR 5: 3D VISUALISATIE)
-    # =========================================================
+# 5. UI TABS & CALCULATIONS
+# =========================================================
+
+tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
+
+with tab_data:
+    t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
+    with t1:
+        st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
+    with t2:
+        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic", key="ed_boxes")
+    with t3:
+        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
+    with t4:
+        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
+
+with tab_calc:
+    # Berekening uitvoeren
+    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
+
+    # Metrics weergeven
+    c1, c2, c3, c4, c5 = st.columns(5)
+    metrics = [
+        (L['stats_weight'], f"{res_w} kg"), 
+        (L['stats_vol'], f"{res_v} m³"), 
+        (L['stats_pal'], res_p), 
+        (L['stats_trucks'], res_t), 
+        (L['stats_lm'], f"{res_lm} m")
+    ]
+    
+    for i, (label, val) in enumerate(metrics):
+        with [c1, c2, c3, c4, c5][i]:
+            st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    # --- 3D VISUALISATIE ---
     st.subheader("3D Trailer Layout")
 
     if not active_units:
         st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
     else:
         fig = go.Figure()
-
-        # Kleurenpalet voor verschillende items
         colors = ['#38bdf8', '#fbbf24', '#f87171', '#34d399', '#a78bfa', '#fb7185']
         
         for p in active_units:
             l, b, h = p['dim']
             x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
-            
-            # Unieke kleur per Item type
             color_idx = hash(str(p['id']).split('_')[0]) % len(colors)
-            color = colors[color_idx]
-
-            # 3D Box constructie
+            
+            # Voeg 3D box toe
             fig.add_trace(go.Mesh3d(
                 x=[x, x, x+l, x+l, x, x, x+l, x+l],
                 y=[y, y+b, y+b, y, y, y+b, y+b, y],
@@ -385,75 +415,54 @@ def calculate_metrics():
                 i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
                 j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                 k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=color,
-                opacity=0.8,
-                name=f"ID: {p['id']}",
-                showlegend=False
+                color=colors[color_idx], opacity=0.8, showlegend=False
             ))
 
-        # Trailer contouren
-        trailer_length = max(res_lm * 100, 1360)
+        # Trailer instellingen
+        trailer_len = max(res_lm * 100, 1360)
         fig.update_layout(
             scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0, trailer_length]),
+                xaxis=dict(title='Lengte (cm)', range=[0, trailer_len]),
                 yaxis=dict(title='Breedte (cm)', range=[0, 250]),
                 zaxis=dict(title='Hoogte (cm)', range=[0, 270]),
                 aspectmode='manual',
                 aspectratio=dict(x=3, y=1, z=1)
             ),
-            margin=dict(l=0, r=0, b=0, t=0),
-            height=600
+            margin=dict(l=0, r=0, b=0, t=0), height=500
         )
-
         st.plotly_chart(fig, use_container_width=True)
 
-        # =========================================================
-        # 6. EXPORT FUNCTIE (PDF)
-        # =========================================================
+        # --- PDF EXPORT ---
         st.divider()
-        
         if st.button("Genereer PDF Rapport"):
             try:
                 pdf = FPDF()
                 pdf.add_page()
-                
-                # Header
                 pdf.set_font("Arial", 'B', 16)
                 pdf.cell(190, 10, "PLEKSEL TRAILER LAADPLAN", ln=True, align='C')
                 pdf.ln(10)
-
-                # Statistieken
-                pdf.set_fill_color(56, 189, 248) 
-                pdf.set_text_color(255, 255, 255)
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(190, 10, " Transport Statistieken", ln=True, fill=True)
                 
-                pdf.set_text_color(0, 0, 0)
-                pdf.set_font("Arial", '', 10)
-                pdf.cell(95, 8, f"Totaal Gewicht: {res_w} kg", border=1)
-                pdf.cell(95, 8, f"Laadmeters: {res_lm} m", border=1, ln=True)
+                # Stats in PDF
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(190, 10, f"Totaal Gewicht: {res_w} kg | Laadmeters: {res_lm} m", ln=True)
                 pdf.ln(5)
 
-                # Tabel
+                # Tabel met laadlijst
                 pdf.set_font("Arial", 'B', 10)
-                pdf.cell(50, 8, "Item ID", border=1)
+                pdf.cell(60, 8, "Item ID", border=1)
                 pdf.cell(40, 8, "Afmetingen", border=1)
-                pdf.cell(50, 8, "Positie (X, Y)", border=1)
-                pdf.cell(50, 8, "Hoogte (Z)", border=1, ln=True)
+                pdf.cell(40, 8, "Positie (X,Y)", border=1)
+                pdf.cell(40, 8, "Hoogte (Z)", border=1, ln=True)
 
                 pdf.set_font("Arial", '', 9)
                 for p in active_units:
-                    pdf.cell(50, 7, str(p['id']), border=1)
+                    pdf.cell(60, 7, str(p['id']), border=1)
                     pdf.cell(40, 7, f"{p['dim'][0]}x{p['dim'][1]}", border=1)
-                    pdf.cell(50, 7, f"X:{round(p['pos'][0])} Y:{round(p['pos'][1])}", border=1)
-                    pdf.cell(50, 7, f"Z:{round(p['pz'])}", border=1, ln=True)
+                    pdf.cell(40, 7, f"{round(p['pos'][0])},{round(p['pos'][1])}", border=1)
+                    pdf.cell(40, 7, f"{round(p['pz'])}", border=1, ln=True)
 
-                pdf_output = pdf.output(dest='S').encode('latin-1')
-                st.download_button(
-                    label="Download Laadplan PDF",
-                    data=pdf_output,
-                    file_name="pleksel_laadplan.pdf",
-                    mime="application/pdf"
-                )
+                pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
-                st.error(f"PDF fout: {e}")
+                st.error(f"Fout bij PDF genereren: {e}")
+
