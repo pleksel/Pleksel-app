@@ -452,8 +452,8 @@ with tab_calc:
                 )
             ))
 
+       
         # Trailer visualisatie instellingen
-              # Trailer visualisatie instellingen
         trailer_len = st.session_state.get("trailer_length", 1360)
         trailer_w   = st.session_state.get("trailer_width", 245)
         trailer_h   = st.session_state.get("trailer_height", 270)
@@ -486,6 +486,7 @@ with tab_calc:
             margin=dict(l=0, r=0, b=0, t=0),
             showlegend=False
         )
+
 
 
 
@@ -556,6 +557,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
