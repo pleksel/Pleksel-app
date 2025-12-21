@@ -390,7 +390,12 @@ with tab_calc:
                 yaxis=dict(title='Breedte (cm)', range=[0, 245], backgroundcolor="#0f172a"),
                 zaxis=dict(title='Hoogte (cm)', range=[0, 270], backgroundcolor="#0f172a"),
                 aspectmode='manual',
-                aspectratio=dict(x=3, y=1, z=1)
+              aspectratio=dict(
+    x=trailer_len / trailer_w,
+    y=1,
+    z=trailer_h / trailer_w
+)
+
             ),
             paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=0, r=0, b=0, t=0),
@@ -445,6 +450,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
