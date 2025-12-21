@@ -187,52 +187,56 @@ if uploaded_file:
 
 def calculate_metrics():
 
+    # --- Orders (gefilterd of alles) ---
     orders = st.session_state.get(
-    'df_orders_calc',
-    st.session_state.get('df_orders', pd.DataFrame())
-)
+        "df_orders_calc",
+        st.session_state.get("df_orders", pd.DataFrame())
+    )
+    items = st.session_state.get("df_items", pd.DataFrame())
 
-    items = st.session_state.get('df_items', pd.DataFrame())
-
-    opt_stack = st.session_state.get('opt_stack', True)
-    opt_orient = st.session_state.get('opt_orient', True)
+    opt_orient = st.session_state.get("opt_orient", True)
 
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    items_cp = items.copy()
-    orders_cp = orders.copy()
+    orders = orders.copy()
+    items = items.copy()
 
-    orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
-    items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
+    orders["ItemNr"] = orders["ItemNr"].astype(str)
+    items["ItemNr"] = items["ItemNr"].astype(str)
 
-    df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
-
+    df = pd.merge(orders, items, on="ItemNr", how="inner")
     if df.empty:
         return 0, 0, 0, 0, 0, []
 
+    # --------------------------------------------------
+    # Units genereren
+    # --------------------------------------------------
     units_to_load = []
 
     for _, row in df.iterrows():
-        for i in range(int(row['Aantal'])):
+        for i in range(int(row["Aantal"])):
             units_to_load.append({
-                'id': f"{row['ItemNr']}_{i}",
-                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                'weight': float(row['Kg']),
-                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                "id": f"{row['OrderNr']}_{row['ItemNr']}_{i}",
+                "dim": [float(row["L_cm"]), float(row["B_cm"]), float(row["H_cm"])],
+                "weight": float(row["Kg"]),
+                "stackable": str(row.get("Stapelbaar", "Ja")).lower() in ["ja", "1", "yes", "true"]
             })
 
-       positioned_units = []
+    # --------------------------------------------------
+    # Simpele stabiele plaatsing (rij-voor-rij)
+    # --------------------------------------------------
+    positioned_units = []
 
     curr_x = 0
     curr_y = 0
     row_depth = 0
 
-    MAX_WIDTH = 245
+    MAX_WIDTH = st.session_state.get("trailer_width", 245)
     SPACING = 2
 
     for u in units_to_load:
-        l, b, h = u['dim']
+        l, b, h = u["dim"]
 
         if opt_orient and l > b:
             l, b = b, l
@@ -242,14 +246,37 @@ def calculate_metrics():
             curr_y = 0
             row_depth = 0
 
-        # (plaatsing volgt later)
+        positioned_units.append({
+            **u,
+            "pos": (curr_x, curr_y),
+            "pz": 0
+        })
 
-    # ✅ LET OP: zelfde inspringing als 'for'
-    total_w = sum(p['weight'] for p in positioned_units)
+        curr_y += b + SPACING
+        row_depth = max(row_depth, l)
 
+    # --------------------------------------------------
+    # Statistieken
+    # --------------------------------------------------
+    total_w = sum(p["weight"] for p in positioned_units)
     total_v = sum(
-        (p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000
+        (p["dim"][0] * p["dim"][1] * p["dim"][2]) / 1_000_000
         for p in positioned_units
+    )
+
+    used_length = curr_x + row_depth
+    lm = round(used_length / 100, 2)
+    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
+
+    return (
+        round(total_w, 1),
+        round(total_v, 2),
+        len(positioned_units),
+        trucks,
+        lm,
+        positioned_units
+    )
+
     )
 
 
@@ -493,6 +520,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
