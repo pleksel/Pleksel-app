@@ -134,17 +134,14 @@ st.session_state.calc_mode = st.sidebar.select_slider(
 )
 
 # ---- Toggles (MOETEN in session_state!) ----
-st.session_state.mix_boxes = st.sidebar.toggle(
-    L['mix'], value=st.session_state.get("mix_boxes", False)
-)
+mix_boxes = st.sidebar.toggle(L['mix'], value=False)
+opt_stack = st.sidebar.toggle(L['stack'], value=True)
+opt_orient = st.sidebar.toggle(L['orient'], value=True)
 
-st.session_state.opt_stack = st.sidebar.toggle(
-    L['stack'], value=st.session_state.get("opt_stack", True)
-)
+st.session_state.mix_boxes = mix_boxes
+st.session_state.opt_stack = opt_stack
+st.session_state.opt_orient = opt_orient
 
-st.session_state.opt_orient = st.sidebar.toggle(
-    L['orient'], value=st.session_state.get("opt_orient", True)
-)
 
 st.sidebar.divider()
 
@@ -194,7 +191,9 @@ def calculate_metrics():
     )
     items = st.session_state.get("df_items", pd.DataFrame())
 
-    opt_orient = st.session_state.get("opt_orient", True)
+    opt_orient = st.session_state.get("opt_orient", False)
+
+    mix_boxes = st.session_state.get('mix_boxes', False)
 
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
@@ -214,14 +213,30 @@ def calculate_metrics():
     # --------------------------------------------------
     units_to_load = []
 
+if mix_boxes:
+    # 🔀 Alles door elkaar
     for _, row in df.iterrows():
-        for i in range(int(row["Aantal"])):
+        for i in range(int(row['Aantal'])):
             units_to_load.append({
-                "id": f"{row['OrderNr']}_{row['ItemNr']}_{i}",
-                "dim": [float(row["L_cm"]), float(row["B_cm"]), float(row["H_cm"])],
-                "weight": float(row["Kg"]),
-                "stackable": str(row.get("Stapelbaar", "Ja")).lower() in ["ja", "1", "yes", "true"]
+                'order': row['OrderNr'],
+                'id': f"{row['OrderNr']}_{row['ItemNr']}_{i}",
+                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                'weight': float(row['Kg']),
+                'stackable': str(row.get('Stack', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
             })
+else:
+    # 📦 Per order gescheiden laden
+    for order_nr, group in df.groupby('OrderNr'):
+        for _, row in group.iterrows():
+            for i in range(int(row['Aantal'])):
+                units_to_load.append({
+                    'order': order_nr,
+                    'id': f"{order_nr}_{row['ItemNr']}_{i}",
+                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                    'weight': float(row['Kg']),
+                    'stackable': str(row.get('Stack', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                })
+
 
     # --------------------------------------------------
     # Simpele stabiele plaatsing (rij-voor-rij)
@@ -553,6 +568,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
