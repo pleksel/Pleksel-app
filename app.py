@@ -431,3 +431,73 @@ with tab_calc:
 
 
     # Plotly Chart logica volgt hieronder...
+
+# =========================================================
+        # 6. EXPORT FUNCTIE (PDF MET VISUALISATIE)
+        # =========================================================
+        st.divider()
+        if st.button("Genereer PDF Rapport"):
+            pdf = FPDF()
+            pdf.add_page()
+            
+            # Header
+            pdf.set_font("Arial", 'B', 16)
+            pdf.cell(190, 10, "PLEKSEL TRAILER LAADPLAN", ln=True, align='C')
+            pdf.set_font("Arial", '', 10)
+            pdf.cell(190, 10, f"Datum: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
+            pdf.ln(10)
+
+            # Statistieken tabel
+            pdf.set_fill_color(56, 189, 248) # Pleksel Blauw
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Arial", 'B', 12)
+            pdf.cell(190, 10, " Transport Statistieken", ln=True, fill=True)
+            
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Arial", '', 10)
+            stats_data = [
+                ["Totaal Gewicht", f"{res_w} kg"],
+                ["Totaal Volume", f"{res_v} m3"],
+                ["Aantal Units", f"{res_p}"],
+                ["Laadmeters", f"{res_lm} m"]
+            ]
+            
+            for item in stats_data:
+                pdf.cell(95, 8, item[0], border=1)
+                pdf.cell(95, 8, item[1], border=1, ln=True)
+            
+            pdf.ln(10)
+
+            # Laadlijst Tabel
+            pdf.set_font("Arial", 'B', 12)
+            pdf.set_text_color(255, 255, 255)
+            pdf.cell(190, 10, " Gedetailleerde Laadlijst", ln=True, fill=True)
+            
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font("Arial", '', 9)
+            
+            # Tabel Headers
+            cols = ["ID", "L (cm)", "B (cm)", "H (cm)", "X-pos", "Z-hoogte"]
+            widths = [50, 28, 28, 28, 28, 28]
+            
+            for i, col in enumerate(cols):
+                pdf.cell(widths[i], 8, col, border=1, fill=False)
+            pdf.ln()
+
+            # Tabel Data
+            for p in active_units:
+                pdf.cell(widths[0], 7, str(p['id']), border=1)
+                pdf.cell(widths[1], 7, str(p['dim'][0]), border=1)
+                pdf.cell(widths[2], 7, str(p['dim'][1]), border=1)
+                pdf.cell(widths[3], 7, str(p['dim'][2]), border=1)
+                pdf.cell(widths[4], 7, str(round(p['pos'][0])), border=1)
+                pdf.cell(widths[5], 7, str(round(p['pz'])), border=1, ln=True)
+
+            # Output PDF naar geheugen
+            pdf_output = pdf.output(dest='S').encode('latin-1')
+            st.download_button(
+                label="Download Laadplan PDF",
+                data=pdf_output,
+                file_name="pleksel_laadplan.pdf",
+                mime="application/pdf"
+            )
