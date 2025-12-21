@@ -314,6 +314,31 @@ with t5:
 with tab_calc:
     # Voer berekening uit (houdt rekening met toggles uit de sidebar)
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
+with tab_calc:
+
+    st.subheader("Order selectie")
+
+    orders_df = st.session_state.df_orders
+
+    order_mode = st.radio(
+        "Bereken op basis van:",
+        ["Alle orders", "Eén order", "Meerdere orders"],
+        horizontal=True
+    )
+
+    selected_orders = None
+
+    if order_mode == "Eén order":
+        selected_orders = st.selectbox(
+            "Selecteer order",
+            orders_df["OrderNr"].unique()
+        )
+
+    elif order_mode == "Meerdere orders":
+        selected_orders = st.multiselect(
+            "Selecteer orders",
+            orders_df["OrderNr"].unique()
+        )
 
     # Dashboard Metrics
     c1, c2, c3, c4, c5 = st.columns(5)
@@ -446,6 +471,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
