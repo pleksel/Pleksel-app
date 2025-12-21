@@ -128,7 +128,7 @@ if uploaded_file:
 # 4. REKEN ENGINE (DYNAMISCHE LOGICA)
 # =========================================================
 def calculate_metrics():
-    # Veiligheidscheck voor data
+    # Veiligheidscheck voor data in session_state
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
     pallets_cfg = st.session_state.get('df_pallets', pd.DataFrame())
@@ -136,37 +136,42 @@ def calculate_metrics():
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    # Merge data
-    df = pd.merge(orders, items, on="ItemNr", how="left").fillna(0)
+    # Merge data en forceer types voor betrouwbare match
+    orders_cp = orders.copy()
+    items_cp = items.copy()
+    orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
+    items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
+    
+    df = pd.merge(orders_cp, items_cp, on="ItemNr", how="left").fillna(0)
     
     total_w = 0
     total_v = 0
     units_to_load = []
     
     # Haal pallet data op (indien aanwezig)
-    p_l = pallets_cfg.iloc[0]['L_cm'] if not pallets_cfg.empty else 120
-    p_b = pallets_cfg.iloc[0]['B_cm'] if not pallets_cfg.empty else 80
-    p_h_max = pallets_cfg.iloc[0]['MaxH_cm'] if not pallets_cfg.empty else 200
+    p_l = float(pallets_cfg.iloc[0]['L_cm']) if not pallets_cfg.empty else 120.0
+    p_b = float(pallets_cfg.iloc[0]['B_cm']) if not pallets_cfg.empty else 80.0
+    p_h_max = float(pallets_cfg.iloc[0]['MaxH_cm']) if not pallets_cfg.empty else 200.0
 
     if "Handmatig" in calc_mode:
-        # LOGICA: Elke order-regel * aantal is een losse unit (bijv. volle pallets/dozen)
+        # LOGICA: Elke order-regel * aantal is een losse unit
         for _, row in df.iterrows():
             qty = int(row['Aantal'])
             for i in range(qty):
                 units_to_load.append({
                     'id': f"{row['ItemNr']}_{i}",
-                    'dim': [row['L_cm'], row['B_cm'], row['H_cm']],
-                    'weight': row['Kg']
+                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                    'weight': float(row['Kg'])
                 })
-            total_w += qty * row['Kg']
-            total_v += (qty * (row['L_cm'] * row['B_cm'] * row['H_cm'])) / 1000000
+            total_w += qty * float(row['Kg'])
+            total_v += (qty * (float(row['L_cm']) * float(row['B_cm']) * float(row['H_cm']))) / 1000000
     else:
         # LOGICA: Automatisch verpakken op basis van volume
         total_item_vol = 0
         for _, row in df.iterrows():
             qty = int(row['Aantal'])
-            total_item_vol += qty * (row['L_cm'] * row['B_cm'] * row['H_cm'])
-            total_w += qty * row['Kg']
+            total_item_vol += qty * (float(row['L_cm']) * float(row['B_cm']) * float(row['H_cm']))
+            total_w += qty * float(row['Kg'])
         
         total_v = total_item_vol / 1000000
         cap_per_pallet = (p_l * p_b * p_h_max) * 0.85
@@ -179,7 +184,7 @@ def calculate_metrics():
                 'weight': total_w / num_p if num_p > 0 else 0
             })
 
-    # Positioneren voor 3D Viewer (2-dik laden)
+    # Positioneren voor 3D Viewer (2-dik laden op Y-as)
     positioned_units = []
     curr_x = 0
     for idx, unit in enumerate(units_to_load):
@@ -190,15 +195,17 @@ def calculate_metrics():
             'pos': [curr_x, y_pos, 0],
             'weight': unit['weight']
         })
-        if idx % 2 != 0: curr_x += unit['dim'][0] + 5
+        if idx % 2 != 0: 
+            curr_x += unit['dim'][0] + 5
 
     num_units = len(units_to_load)
-    lm = round((curr_x + 120) / 100, 2) if num_units > 0 else 0
+    lm = round((curr_x + (p_l if num_units > 0 else 0)) / 100, 2)
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
     
     return round(total_w, 1), round(total_v, 2), num_units, trucks, lm, positioned_units
+
 # =========================================================
-# 5. UI TABS (DAARNÁ AANROEPEN)
+# 5. UI TABS
 # =========================================================
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
@@ -214,21 +221,24 @@ with tab_data:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
 
 with tab_calc:
-    # NU is de functie bekend en kan deze aangeroepen worden
-    tw, tv, tp, tt, tlm, active_pallets = calculate_real_metrics()
+    # Belangrijk: haal alle 6 de variabelen op
+    tw, tv, tp, tt, tlm, active_units = calculate_metrics()
 
-    # Dashboard
+    # Statistieken
     c1, c2, c3, c4, c5 = st.columns(5)
     metrics = [(L['stats_weight'], f"{tw} kg"), (L['stats_vol'], f"{tv} m³"), (L['stats_pal'], tp), (L['stats_trucks'], tt), (L['stats_lm'], f"{tlm} m")]
     for i, (label, val) in enumerate(metrics):
         with [c1, c2, c3, c4, c5][i]:
             st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
 
+    st.divider()
+
     # 3D Viewer
     fig = go.Figure()
+    # Trailer Vloer
     fig.add_trace(go.Mesh3d(x=[0, 1360, 1360, 0, 0, 1360, 1360, 0], y=[0, 0, 245, 245, 0, 0, 245, 245], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.4))
     
-    for p in active_pallets:
+    for p in active_units:
         px, py, pz = p['pos']
         pl, pb, ph = p['dim']
         fig.add_trace(go.Mesh3d(
@@ -241,9 +251,5 @@ with tab_calc:
 
     fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
     st.plotly_chart(fig, use_container_width=True)
-
-
-
-
 
 
