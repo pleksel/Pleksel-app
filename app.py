@@ -540,7 +540,10 @@ with t5:
                     </div>
                 """, unsafe_allow_html=True)
             
-            st.info(f"**Status:**\n- Mix: {'AAN' if mix_boxes else 'UIT'}\n- Stapel: {'AAN' if opt_stack else 'UIT'}\n- Orient: {'AAN' if opt_orient else 'UIT'}")
+            st.info(f"**Status:**\n- Mix: {'AAN' if mix_boxes else 'UIT'}\n- Stapel: {'opt_stack = st.session_state.get("opt_stack", False)
+opt_orient = st.session_state.get("opt_orient", False)
+mix_boxes = st.session_state.get("mix_boxes", False)
+'}\n- Orient: {'AAN' if opt_orient else 'UIT'}")
 
         # --- PDF EXPORT ---
         st.divider()
@@ -575,6 +578,7 @@ with t5:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
