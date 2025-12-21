@@ -268,7 +268,14 @@ def calculate_metrics():
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
-    t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
+    t1, t2, t3, t4, t5 = st.tabs([
+    "Items",
+    "Boxes",
+    "Pallets",
+    "Orders",
+    "Trailers"
+])
+
     with t1:
         st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
     with t2:
@@ -277,6 +284,8 @@ with tab_data:
         st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
     with t4:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
+with t5:
+    st.info("Hier komen de trailer- en containerinstellingen")
 
 with tab_calc:
     # Voer berekening uit (houdt rekening met toggles uit de sidebar)
@@ -408,6 +417,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
