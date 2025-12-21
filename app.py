@@ -1,161 +1,136 @@
 import streamlit as st
 import pandas as pd
-import io
+import math, io, os
+from fpdf import FPDF
 
 # =========================================================
-# 1. THE SIMULATOR ENGINE - UI & CONTRAST
+# 1. THEME & ENGINE UI (Industrial Contrast)
 # =========================================================
-st.set_page_config(page_title="TRUCK LOAD ENGINE", layout="wide")
+st.set_page_config(page_title="PLEKSEL PRO - ENGINE", layout="wide")
 
-def apply_industrial_theme():
+def apply_simulator_css():
     st.markdown("""
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@600&display=swap');
-
-        /* Achtergrond */
-        .stApp {
-            background-color: #0f1216;
-            color: #e2e8f0;
-            font-family: 'JetBrains Mono', monospace;
-        }
-
-        /* SIDEBAR: Donker met fel contrast */
-        section[data-testid="stSidebar"] {
-            background-color: #05070a !important;
-            border-right: 1px solid #1e293b;
-        }
         
-        /* Sidebar tekst: Fel Blauw/Cyaan voor leesbaarheid */
-        section[data-testid="stSidebar"] .stMarkdown, 
-        section[data-testid="stSidebar"] label,
-        section[data-testid="stSidebar"] span {
-            color: #38bdf8 !important; 
-            font-family: 'Rajdhani', sans-serif;
-            font-size: 1rem !important;
+        .stApp { background-color: #05070a; color: #e2e8f0; font-family: 'JetBrains Mono', monospace; }
+        
+        /* SIDEBAR: Donker met fel Cyaan tekst */
+        section[data-testid="stSidebar"] { background-color: #000000 !important; border-right: 1px solid #38bdf8; }
+        section[data-testid="stSidebar"] .stMarkdown, section[data-testid="stSidebar"] label {
+            color: #38bdf8 !important; font-family: 'Rajdhani', sans-serif; font-size: 1.1rem !important;
         }
 
-        /* Tab styling: Maak ze groot en opvallend */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 10px;
-            background-color: #0f1216;
-        }
-
+        /* TABS Styling */
+        .stTabs [data-baseweb="tab-list"] { gap: 10px; background-color: #05070a; }
         .stTabs [data-baseweb="tab"] {
-            height: 50px;
-            background-color: #1e293b;
-            border-radius: 5px 5px 0px 0px;
-            color: #ffffff;
-            padding: 10px 30px;
+            height: 50px; background-color: #1e293b; border-radius: 5px 5px 0px 0px; color: #ffffff; padding: 10px 30px;
         }
+        .stTabs [aria-selected="true"] { background-color: #38bdf8 !important; color: #000000 !important; font-weight: bold; }
 
-        .stTabs [aria-selected="true"] {
-            background-color: #38bdf8 !important;
-            color: #000000 !important;
-            font-weight: bold;
-        }
-
-        /* Container blokken */
-        .input-block {
-            background: rgba(30, 41, 59, 0.5);
-            border: 1px solid #334155;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-
-        /* Knoppen */
+        /* Headers & Containers */
+        h1, h2, h3 { font-family: 'Rajdhani', sans-serif; color: #38bdf8; text-transform: uppercase; letter-spacing: 2px; }
+        .table-header { font-weight: bold; color: #38bdf8; margin-top: 15px; border-bottom: 1px solid #38bdf8; padding-bottom: 5px; }
+        
+        /* Buttons */
         div.stButton > button {
-            background: #38bdf8 !important;
-            color: #0f1216 !important;
-            border: none !important;
-            font-weight: bold;
-            text-transform: uppercase;
-            width: 100%;
+            background: #ffaa00 !important; color: #000000 !important; border: none !important;
+            font-weight: bold; text-transform: uppercase; width: 100%; height: 3em;
         }
     </style>
     """, unsafe_allow_html=True)
 
-apply_industrial_theme()
+apply_simulator_css()
 
 # =========================================================
-# 2. SESSION STATE (DATA OPSLAG)
+# 2. CONFIGURATIE & MEERTALIGHEID (JOUW DATA)
 # =========================================================
-for key in ['master_data_df', 'boxes_df', 'pallets_df', 'trucks_df', 'results_df']:
-    if key not in st.session_state:
-        st.session_state[key] = pd.DataFrame()
+LANGS = {
+    "NL": {
+        "tab_input": "01: MISSION DATA", "tab_output": "02: RESULTS",
+        "btn_calc": "Bereken Planning", "pals": "Pallets", "weight": "Totaal Gewicht (KG)", 
+        "meters": "Laadmeters", "trucks": "Trucks Nodig", "opt_stack": "Pallets stapelbaar?",
+        "download_template": "Download Lege Template", "header_master": "📦 Artikelen Master Data", 
+        "header_boxes": "🎁 Dozen Configuratie", "header_pallets": "🟫 Pallet Types", "header_trucks": "🚛 Custom Trucks"
+    },
+    "EN": {
+        "tab_input": "01: MISSION DATA", "tab_output": "02: RESULTS",
+        "btn_calc": "Calculate Planning", "pals": "Pallets", "weight": "Total Weight (KG)", 
+        "meters": "Loading Meters", "trucks": "Trucks Needed", "opt_stack": "Pallets stackable?",
+        "download_template": "Download Empty Template", "header_master": "📦 Items Master Data", 
+        "header_boxes": "🎁 Boxes Configuration", "header_pallets": "🟫 Pallet Types", "header_trucks": "🚛 Custom Trucks"
+    }
+}
+
+# Sidebar settings & Taal selectie
+st.sidebar.title("SYSTEM SETTINGS")
+lang_choice = st.sidebar.selectbox("Select Language", ["NL", "EN"])
+T = LANGS[lang_choice]
+
+# Kolomdefinities (Jouw originele specs)
+MASTER_COLS = {"ItemNr": str, "Lengte": float, "Breedte": float, "Hoogte": float, "Gewicht": float}
+BOXES_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "Hoogte": float, "Gewicht": float}
+PALLETS_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "MaxHoogte": float, "Gewicht": float, "PalletHoogte": float, "PalletStapelbaar": bool}
+TRUCK_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "Hoogte": float, "MaxGewicht": float}
+
+# Init Session State (Jouw originele specs)
+for key, cols in [("master_data_df", MASTER_COLS), ("boxes_df", BOXES_COLS), ("pallets_df", PALLETS_COLS), ("orders_df", {"OrderNr": str, "ItemNr": str, "Aantal": int}), ("custom_trucks_df", TRUCK_COLS)]:
+    if key not in st.session_state: 
+        st.session_state[key] = pd.DataFrame(columns=cols.keys())
 
 # =========================================================
-# 3. SIDEBAR CONTROLS
+# 3. INTERFACE (TABBLADEN)
 # =========================================================
-with st.sidebar:
-    st.markdown("### SYSTEM CONTROLS")
-    st.divider()
-    calc_mode = st.radio("OPTIMIZATION STRATEGY", ["Max Volume", "Max Weight", "Balanced"])
-    st.divider()
-    st.checkbox("Allow Stackable Items", value=True)
-    st.checkbox("Group by Order ID", value=False)
-    st.slider("Safety Margin (%)", 0, 10, 5)
+st.title("🚛 PLEKSEL PRO ENGINE")
 
-# =========================================================
-# 4. MAIN INTERFACE (TABS)
-# =========================================================
-st.title("TRUCK LOAD CALCULATOR")
-
-tab_input, tab_output = st.tabs(["[ 01: MISSION DATA ]", "[ 02: CALCULATION RESULTS ]"])
+tab_data, tab_results = st.tabs([f" [ {T['tab_input']} ] ", f" [ {T['tab_output']} ] "])
 
 # --- TAB 1: DATA INVOER ---
-with tab_input:
-    st.markdown("### DATA ACQUISITION")
+with tab_data:
+    st.subheader("COMMAND & DATA INPUT")
     
-    # Upload Rij
-    with st.container():
-        st.markdown("<div class='input-block'>", unsafe_allow_html=True)
-        up_col, down_col = st.columns([2, 1])
-        with up_col:
-            st.file_uploader("IMPORT EXCEL MANIFEST", type=["xlsx"])
-        with down_col:
-            st.write("ACTIONS")
-            st.button("CLEAR ALL DATA")
-        st.markdown("</div>", unsafe_allow_html=True)
+    # Download/Upload Sectie
+    c1, c2 = st.columns([1, 2])
+    with c1:
+        st.download_button(T["download_template"], io.BytesIO().getvalue(), "template.xlsx")
+    with c2:
+        up = st.file_uploader("UPLOAD EXCEL MANIFEST", type="xlsx")
 
-    # Tables Grid
-    col_l, col_r = st.columns(2)
+    # Hoofd Tabel
+    st.markdown(f"<div class='table-header'>{T['header_master']}</div>", unsafe_allow_html=True)
+    st.session_state.master_data_df = st.data_editor(st.session_state.master_data_df, num_rows="dynamic", key="m_ed", use_container_width=True)
+
+    # Sub Tabellen
+    col_left, col_right = st.columns(2)
+    with col_left:
+        st.markdown(f"<div class='table-header'>{T['header_boxes']}</div>", unsafe_allow_html=True)
+        st.session_state.boxes_df = st.data_editor(st.session_state.boxes_df, num_rows="dynamic", key="b_ed", use_container_width=True)
     
-    with col_l:
-        st.write("ITEM MASTER DATA")
-        st.session_state.master_data_df = st.data_editor(st.session_state.master_data_df, num_rows="dynamic", use_container_width=True, key="ed_m")
-        
-        st.write("PALLET CONFIGURATION")
-        st.session_state.pallets_df = st.data_editor(st.session_state.pallets_df, num_rows="dynamic", use_container_width=True, key="ed_p")
+    with col_right:
+        st.markdown(f"<div class='table-header'>{T['header_pallets']}</div>", unsafe_allow_html=True)
+        st.session_state.pallets_df = st.data_editor(st.session_state.pallets_df, num_rows="dynamic", key="p_ed", use_container_width=True)
 
-    with col_r:
-        st.write("BOX DIMENSIONS")
-        st.session_state.boxes_df = st.data_editor(st.session_state.boxes_df, num_rows="dynamic", use_container_width=True, key="ed_b")
-        
-        st.write("TRUCK / CONTAINER FLEET")
-        st.session_state.trucks_df = st.data_editor(st.session_state.trucks_df, num_rows="dynamic", use_container_width=True, key="ed_t")
+    st.markdown(f"<div class='table-header'>{T['header_trucks']}</div>", unsafe_allow_html=True)
+    st.session_state.custom_trucks_df = st.data_editor(st.session_state.custom_trucks_df, num_rows="dynamic", key="t_ed", use_container_width=True)
 
     st.divider()
-    if st.button("RUN CALCULATION ENGINE"):
-        st.toast("Processing data...", icon="⏳")
+    if st.button(T["btn_calc"]):
+        st.success("SIMULATION STARTED...")
 
 # --- TAB 2: UITKOMSTEN ---
-with tab_output:
-    st.markdown("### ANALYTICS & LOADING PLAN")
+with tab_results:
+    st.subheader("MISSION ANALYTICS")
     
-    # HUD Stats
+    # HUD Display voor statistieken
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("TRUCKS NEEDED", "0")
-    m2.metric("TOTAL LOADING METERS", "0.0m")
-    m3.metric("UTILIZATION", "0%")
-    m4.metric("TOTAL WEIGHT", "0 kg")
+    m1.metric(T["pals"], "0")
+    m2.metric(T["weight"], "0 KG")
+    m3.metric(T["meters"], "0.0 m")
+    m4.metric(T["trucks"], "0")
 
-    st.markdown("<div class='input-block'>", unsafe_allow_html=True)
-    st.write("LOADING SEQUENCE & INSTRUCTIONS")
-    if st.session_state.results_df.empty:
-        st.warning("NO RESULTS YET. RUN THE ENGINE ON THE DATA TAB.")
-    else:
-        st.dataframe(st.session_state.results_df, use_container_width=True)
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("<div class='table-header'>LOADING PLAN SEQUENCE</div>", unsafe_allow_html=True)
+    # Placeholder voor resultaten tabel
+    st.info("No data processed. Please run calculation in the Mission Data tab.")
     
-    st.button("DOWNLOAD LOADING PLAN (PDF)")
+    st.sidebar.divider()
+    st.sidebar.write("ENGINE STATUS: 🟢 ACTIVE")
