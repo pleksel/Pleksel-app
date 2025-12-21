@@ -117,86 +117,67 @@ L = T[st.session_state.lang]
 
 
 # =========================================================
-
-# 3. SIDEBAR (Instellingen & Template Upload)
-
+# 3. SIDEBAR (Instellingen & Template Upload)  ✅ FIXED
 # =========================================================
 
 st.sidebar.title(L['settings'])
-
-st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
-
-
-
-# Nieuwe Slider voor berekeningsmethode
-
-calc_mode = st.sidebar.select_slider(
-
-    "Berekeningsmethode",
-
-    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
-
-    value="Handmatig (Volle units)",
-
-    help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
-
+st.session_state.lang = st.sidebar.selectbox(
+    "Language / Sprache / Taal", ["NL", "EN", "DE"], key="lang_select"
 )
 
+# ---- Berekeningsmethode (SLIDER) ----
+st.session_state.calc_mode = st.sidebar.select_slider(
+    "Berekeningsmethode",
+    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
+    value=st.session_state.get("calc_mode", "Handmatig (Volle units)"),
+    help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
+)
 
+# ---- Toggles (MOETEN in session_state!) ----
+st.session_state.mix_boxes = st.sidebar.toggle(
+    L['mix'], value=st.session_state.get("mix_boxes", False)
+)
 
-mix_boxes = st.sidebar.toggle(L['mix'], value=False)
+st.session_state.opt_stack = st.sidebar.toggle(
+    L['stack'], value=st.session_state.get("opt_stack", True)
+)
 
-opt_stack = st.sidebar.toggle(L['stack'], value=True)
-
-opt_orient = st.sidebar.toggle(L['orient'], value=True)
-
-
+st.session_state.opt_orient = st.sidebar.toggle(
+    L['orient'], value=st.session_state.get("opt_orient", True)
+)
 
 st.sidebar.divider()
 
-
-
-# Template Download (4 tabbladen)
-
+# ---- Template Download ----
 buffer_dl = io.BytesIO()
-
 with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
-
-    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
-
-    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
-
-    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
-
-    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
-
-
+    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(
+        writer, sheet_name='Item Data', index=False
+    )
+    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(
+        writer, sheet_name='Box Data', index=False
+    )
+    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(
+        writer, sheet_name='Pallet Data', index=False
+    )
+    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(
+        writer, sheet_name='Order Data', index=False
+    )
 
 st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "pleksel_template.xlsx")
 
-
-
+# ---- Upload ----
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
-
 if uploaded_file:
-
     try:
-
         xls = pd.ExcelFile(uploaded_file)
-
         st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
-
         st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
-
         st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
-
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
-
         st.sidebar.success("Geladen!")
-
-    except:
-
-        st.sidebar.error("Fout in bestand.")
+    except Exception as e:
+        st.sidebar.error(f"Fout in bestand: {e}")
 
 # =========================================================
 
@@ -502,5 +483,6 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
