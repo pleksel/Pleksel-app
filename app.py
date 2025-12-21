@@ -131,12 +131,16 @@ def calculate_metrics():
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
     
+    # Haal instellingen uit session_state
+    opt_stack = st.session_state.get('opt_stack', True)
+    opt_orient = st.session_state.get('opt_orient', True)
+
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
     
-    items = items.rename(columns={'L': 'L_cm', 'B': 'B_cm', 'H': 'H_cm'})
+    # Normaliseer kolomnamen
+    items_cp = items.copy().rename(columns={'L': 'L_cm', 'B': 'B_cm', 'H': 'H_cm', 'Stapelbaar': 'Stack'})
     orders_cp = orders.copy()
-    items_cp = items.copy()
     orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
     items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
     
@@ -145,63 +149,52 @@ def calculate_metrics():
 
     units_to_load = []
     for _, row in df.iterrows():
-        qty = int(row['Aantal'])
-        for i in range(qty):
+        for i in range(int(row['Aantal'])):
             units_to_load.append({
                 'id': f"{row['ItemNr']}_{i}",
                 'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
                 'weight': float(row['Kg']),
-                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                'stackable': str(row.get('Stack', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
             })
 
     positioned_units = []
     curr_x = 0
     i = 0
-    trailer_width = 245
-    max_h = 250 # Standaard trailer hoogte
+    max_h = 250 
 
     while i < len(units_to_load):
         u = units_to_load[i]
         l, b, h = u['dim']
         
-        # Orientatie logica (Lang/Breed)
-        if opt_orient and l > b and (curr_x + b <= 1360):
-            l, b = b, l # Draai pallet
-        
-        # Stapel logica (alleen als opt_stack aan staat en item stapelbaar is)
-        pz = 0
-        target_idx = -1
-        if opt_stack and u['stackable']:
-            for idx, prev in enumerate(positioned_units):
-                # Check of er iets onder kan (eenvoudige overlap check)
-                if prev['pos'][0] == curr_x and prev['pos'][1] == 0: # Vereenvoudigd voor NL/EN logic
-                    if prev['pz'] == 0 and (prev['dim'][2] + h) <= max_h:
-                        pz = prev['dim'][2]
-                        target_idx = idx
-                        break
+        # Oriëntatie logica
+        if opt_orient and l > b:
+            l, b = b, l 
 
-        # Breedte laden (Optie B uit origineel)
-        if opt_orient and b <= 121 and (i + 1) < len(units_to_load):
-            # Plaats 2 naast elkaar
-            for j in range(2):
-                if i < len(units_to_load):
+        # Stapel logica: Zoek of dit item op een bestaande positie past
+        stacked = False
+        if opt_stack and u['stackable']:
+            for p in positioned_units:
+                # Check of er ruimte bovenop een unit op de huidige x-as is
+                if p['pos'][0] == curr_x and p['pz'] == 0 and (p['dim'][2] + h <= max_h):
                     positioned_units.append({
-                        'id': units_to_load[i]['id'],
-                        'dim': [80, 120, units_to_load[i]['dim'][2]],
-                        'pos': [curr_x, j * 122, 0],
-                        'pz': 0,
-                        'weight': units_to_load[i]['weight']
+                        'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, p['pos'][1], 0], 
+                        'pz': p['dim'][2], 'weight': u['weight']
                     })
-                    i += 1
-            curr_x += 81
-        else:
-            # Enkel laden
-            positioned_units.append({
-                'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, 0, 0], 
-                'pz': pz, 'weight': u['weight']
-            })
-            if pz == 0: curr_x += l + 2
-            i += 1
+                    stacked = True
+                    break
+        
+        if not stacked:
+            # Als we niet kunnen stapelen, check of we 2-breed kunnen laden
+            if opt_orient and b <= 120 and (i + 1) < len(units_to_load):
+                positioned_units.append({'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, 0, 0], 'pz': 0, 'weight': u['weight']})
+                i += 1
+                u2 = units_to_load[i]
+                positioned_units.append({'id': u2['id'], 'dim': [u2['dim'][1], u2['dim'][0], u2['dim'][2]], 'pos': [curr_x, 122, 0], 'pz': 0, 'weight': u2['weight']})
+                curr_x += 82
+            else:
+                positioned_units.append({'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, 0, 0], 'pz': 0, 'weight': u['weight']})
+                curr_x += l + 2
+        i += 1
 
     total_w = sum(p['weight'] for p in positioned_units)
     total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in positioned_units)
@@ -253,3 +246,4 @@ with tab_calc:
         margin=dict(l=0,r=0,b=0,t=0)
     )
     st.plotly_chart(fig, use_container_width=True)
+
