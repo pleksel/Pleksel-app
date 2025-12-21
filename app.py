@@ -15,83 +15,50 @@ def apply_ui_theme():
     <style>
         .stApp { background-color: #020408; color: #e2e8f0; }
         section[data-testid="stSidebar"] { background-color: #000000 !important; border-right: 1px solid #38bdf8; }
-        div[data-testid="stDataEditor"] { background-color: #0f172a !important; border: 1px solid #38bdf8 !important; }
         .table-header { color: #38bdf8; font-weight: bold; border-bottom: 2px solid #38bdf8; padding: 5px 0; margin-top: 20px; margin-bottom: 10px; }
-        div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; width: 100%; border-radius: 4px; }
-        .stTabs [data-baseweb="tab-list"] { background-color: #020408; }
-        .stTabs [aria-selected="true"] { background-color: #38bdf8 !important; color: #000 !important; }
+        div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; border-radius: 4px; }
+        .metric-card { background: #111827; border: 1px solid #38bdf8; padding: 15px; border-radius: 8px; text-align: center; }
+        .metric-val { color: #38bdf8; font-size: 24px; font-weight: bold; }
     </style>
     """, unsafe_allow_html=True)
 
 apply_ui_theme()
 
 # =========================================================
-# 2. TAAL & INITIALISATIE (Nu incl. DE)
+# 2. TAAL & INITIALISATIE
 # =========================================================
 if 'lang' not in st.session_state: st.session_state.lang = 'NL'
 
 T = {
     'NL': {
-        'settings': "Trailer Instellingen",
-        'mix': "Mix Boxes (Items mixen)",
-        'stack': "Pallets Stapelen (Dubbeldek)",
-        'orient': "Lang/Breed laden (Rotatie optimalisatie)",
-        'data_tab': "01: DATA INVOER",
-        'calc_tab': "02: TRAILER PLANNING",
-        'master': "Master Data (Items & Stapelbaarheid)",
-        'order': "Order Lijst",
-        'boxes': "Dozen Configuraties",
-        'pallets': "Pallet Types",
-        'truck': "Container / Truck Afmetingen",
-        'download': "Download Template",
-        'gen_pdf': "Genereer PDF per Order",
-        'load_m': "Laadmeters"
+        'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen", 
+        'orient': "Lang/Breed laden", 'data_tab': "01: DATA INVOER", 'calc_tab': "02: PLANNING",
+        'master': "Master Data", 'order': "Order Lijst", 'boxes': "Dozen", 'pallets': "Pallet Types", 
+        'truck': "Truck/Container", 'download': "Download Template", 'upload': "Upload Template",
+        'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 'stats_pal': "Aantal Pallets",
+        'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
     },
     'EN': {
-        'settings': "Trailer Settings",
-        'mix': "Mix Boxes (Mix items)",
-        'stack': "Stack Pallets (Double deck)",
-        'orient': "Length/Width loading (Rotation optimization)",
-        'data_tab': "01: DATA ENTRY",
-        'calc_tab': "02: TRAILER PLANNING",
-        'master': "Master Data (Items & Stackability)",
-        'order': "Order List",
-        'boxes': "Box Configurations",
-        'pallets': "Pallet Types",
-        'truck': "Container / Truck Dimensions",
-        'download': "Download Template",
-        'gen_pdf': "Generate PDF per Order",
-        'load_m': "Loading Meters"
+        'settings': "Trailer Settings", 'mix': "Mix Boxes", 'stack': "Stack Pallets", 
+        'orient': "Long/Wide Loading", 'data_tab': "01: DATA ENTRY", 'calc_tab': "02: PLANNING",
+        'master': "Master Data", 'order': "Order List", 'boxes': "Boxes", 'pallets': "Pallet Types", 
+        'truck': "Truck/Container", 'download': "Download Template", 'upload': "Upload Template",
+        'stats_weight': "Total Weight", 'stats_vol': "Total Volume", 'stats_pal': "Pallet Count",
+        'stats_trucks': "Truck Count", 'stats_lm': "Loading Meters"
     },
     'DE': {
-        'settings': "Trailer-Einstellungen",
-        'mix': "Mix-Boxen (Elemente mischen)",
-        'stack': "Paletten stapeln (Doppelstock)",
-        'orient': "Längs-/Querladen (Rotationsoptimierung)",
-        'data_tab': "01: DATENEINGABE",
-        'calc_tab': "02: TRAILER-PLANUNG",
-        'master': "Stammdaten (Artikel & Stapelbarkeit)",
-        'order': "Bestellliste",
-        'boxes': "Box-Konfigurationen",
-        'pallets': "Palettentypen",
-        'truck': "LKW / Container Abmessungen",
-        'download': "Vorlage herunterladen",
-        'gen_pdf': "PDF pro Bestellung erstellen",
-        'load_m': "Lademeter"
+        'settings': "Trailer-Einstellungen", 'mix': "Mix-Boxen", 'stack': "Paletten stapeln", 
+        'orient': "Längs-/Querladen", 'data_tab': "01: DATENEINGABE", 'calc_tab': "02: PLANUNG",
+        'master': "Stammdaten", 'order': "Bestellliste", 'boxes': "Boxen", 'pallets': "Palettentypen", 
+        'truck': "LKW/Container", 'download': "Vorlage laden", 'upload': "Vorlage hochladen",
+        'stats_weight': "Gesamtgewicht", 'stats_vol': "Gesamtvolumen", 'stats_pal': "Anzahl Paletten",
+        'stats_trucks': "Anzahl LKWs", 'stats_lm': "Lademeter"
     }
 }
 L = T[st.session_state.lang]
 
-# Data initialisatie
-MASTER_COLS = ["ItemNr", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "Gewicht_kg", "VerplichteDoos", "MagStapelen"]
-for key, cols in [("m_df", MASTER_COLS), ("b_df", ["Naam", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "LeegGewicht_kg"]), 
-                  ("p_df", ["Naam", "Lengte_cm", "Breedte_cm", "EigenGewicht_kg", "MaxHoogte_cm"]), 
-                  ("t_df", ["Naam", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "MaxLading_kg"]), 
-                  ("o_df", ["OrderNr", "ItemNr", "Aantal"])]:
-    if key not in st.session_state: st.session_state[key] = pd.DataFrame(columns=cols)
-
 # =========================================================
-# 3. SIDEBAR (Opties & Logica)
+# 3. SIDEBAR (Instellingen & Template Upload)
 # =========================================================
 st.sidebar.title(L['settings'])
 st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
@@ -101,46 +68,30 @@ opt_stack = st.sidebar.toggle(L['stack'], value=True)
 opt_orient = st.sidebar.toggle(L['orient'], value=True)
 
 st.sidebar.divider()
-st.sidebar.download_button(L['download'], "Template Data", "template.xlsx")
+# Template Download
+template_df = pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "Gewicht_kg"])
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+    template_df.to_excel(writer, index=False)
+st.sidebar.download_button(L['download'], buffer.getvalue(), "pleksel_template.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+# Template Upload
+uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx', 'csv'])
+if uploaded_file:
+    st.sidebar.success("Bestand succesvol geladen!")
 
 # =========================================================
-# 4. 3D LOGICA (EFFICIËNT LADEN)
+# 4. REKEN ENGINE (SIMULATIE)
 # =========================================================
-def draw_trailer_3d(l, b, h, pallets=[]):
-    fig = go.Figure()
-    # Vloer
-    fig.add_trace(go.Mesh3d(x=[0, l, l, 0, 0, l, l, 0], y=[0, 0, b, b, 0, 0, b, b], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.3))
-    
-    # Pallet Plaatsing Logica (Side-by-side)
-    # Hier simuleren we dat de motor pallets naast elkaar zet als de breedte het toelaat (245cm)
-    current_x = 0
-    current_y = 0
-    max_y_in_row = 0
-    
-    pallet_colors = ['#00f2ff', '#7000ff', '#ff0070', '#38bdf8']
-
-    for i, p in enumerate(pallets):
-        pl, pb, ph = p['dim']
-        
-        # Check of pallet naast de vorige past
-        if current_y + pb > b:
-            current_x += 125 # Schuif naar volgende rij (bijv. Europallet lengte + marge)
-            current_y = 0
-            
-        px, py, pz = current_x, current_y, p['pos'][2] # Z-as blijft voor stapelen
-        
-        fig.add_trace(go.Mesh3d(
-            x=[px, px+pl, px+pl, px, px, px+pl, px+pl, px],
-            y=[py, py, py+pb, py+pb, py, py, py+pb, py+pb],
-            z=[pz, pz, pz, pz, pz+ph, pz+ph, pz+ph, pz+ph],
-            i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-            color=pallet_colors[i % len(pallet_colors)], opacity=0.8, name=f"P: {p['id']}"
-        ))
-        
-        current_y += pb + 5 # 5cm marge tussen pallets
-
-    fig.update_layout(scene=dict(aspectmode='data', xaxis_title="Lengte", yaxis_title="Breedte"), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
-    return fig, round(current_x / 100, 2)
+def calculate_metrics(pallets):
+    total_w = sum(p['weight'] for p in pallets)
+    total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in pallets)
+    num_pal = len(pallets)
+    # Bereken laadmeter op basis van unieke X-posities (max lengte van de trailer benutting)
+    max_x = max([p['pos'][0] + p['dim'][0] for p in pallets]) if pallets else 0
+    lm = round(max_x / 100, 2)
+    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
+    return total_w, round(total_v, 2), num_pal, trucks, lm
 
 # =========================================================
 # 5. UI TABS
@@ -149,44 +100,64 @@ tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
     st.markdown(f"<div class='table-header'>{L['master']}</div>", unsafe_allow_html=True)
-    st.session_state.m_df = st.data_editor(st.session_state.m_df, num_rows="dynamic", use_container_width=True)
+    st.data_editor(pd.DataFrame(columns=["ItemNr", "L", "B", "H", "Kg", "Stapelbaar"]), num_rows="dynamic", use_container_width=True)
     
-    c1, c2 = st.columns(2)
-    with c1:
+    col1, col2 = st.columns(2)
+    with col1:
         st.markdown(f"<div class='table-header'>{L['order']}</div>", unsafe_allow_html=True)
-        st.session_state.o_df = st.data_editor(st.session_state.o_df, num_rows="dynamic", use_container_width=True)
-    with c2:
+        st.data_editor(pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]), num_rows="dynamic", use_container_width=True)
+    with col2:
         st.markdown(f"<div class='table-header'>{L['boxes']}</div>", unsafe_allow_html=True)
-        st.session_state.b_df = st.data_editor(st.session_state.b_df, num_rows="dynamic", use_container_width=True)
+        st.data_editor(pd.DataFrame(columns=["Naam", "L", "B", "H", "LeegKg"]), num_rows="dynamic", use_container_width=True)
 
     st.markdown(f"<div class='table-header'>{L['pallets']}</div>", unsafe_allow_html=True)
-    st.session_state.p_df = st.data_editor(st.session_state.p_df, num_rows="dynamic", use_container_width=True)
+    st.data_editor(pd.DataFrame(columns=["Naam", "L", "B", "EigenKg", "MaxH"]), num_rows="dynamic", use_container_width=True)
     
     st.markdown(f"<div class='table-header'>{L['truck']}</div>", unsafe_allow_html=True)
-    st.session_state.t_df = st.data_editor(st.session_state.t_df, num_rows="dynamic", use_container_width=True)
+    st.data_editor(pd.DataFrame(columns=["Naam", "L", "B", "H", "MaxKg"]), num_rows="dynamic", use_container_width=True)
 
 with tab_calc:
-    # Mock data die rekening houdt met stapelen
+    # Mock data voor simulatie (X, Y, Z)
+    # Let op: Y-as gaat tot 245cm voor 'naast elkaar' laden
     mock_pallets = [
-        {'id': 'PAL-A1', 'order': '1001', 'pos': [0, 0, 0], 'dim': [120, 80, 120], 'weight': 200, 'stack': 'Ja'},
-        {'id': 'PAL-A2', 'order': '1001', 'pos': [0, 0, 125], 'dim': [120, 80, 100], 'weight': 150, 'stack': 'Ja'}, # GESTAPELD
-        {'id': 'PAL-B1', 'order': '1001', 'pos': [0, 0, 0], 'dim': [120, 80, 240], 'weight': 500, 'stack': 'Nee'},
-        {'id': 'PAL-C1', 'order': '1002', 'pos': [0, 0, 0], 'dim': [120, 80, 150], 'weight': 300, 'stack': 'Nee'},
+        {'id': 'P1', 'weight': 400, 'dim': [120, 80, 110], 'pos': [0, 0, 0]},
+        {'id': 'P2', 'weight': 400, 'dim': [120, 80, 110], 'pos': [0, 85, 0]},
+        {'id': 'P3', 'weight': 400, 'dim': [120, 80, 110], 'pos': [0, 170, 0]},
+        {'id': 'P4', 'weight': 200, 'dim': [120, 80, 100], 'pos': [0, 0, 115]}, # Gestapeld op P1
     ]
-
-    col_3d, col_info = st.columns([3, 1])
-    with col_3d:
-        fig, laadmeters = draw_trailer_3d(1360, 245, 270, mock_pallets)
-        st.plotly_chart(fig, use_container_width=True)
     
-    with col_info:
-        st.markdown("<div style='background:#111827; padding:15px; border-left:4px solid #38bdf8;'>", unsafe_allow_html=True)
-        st.write(f"### {L['gen_pdf']}")
-        order_sel = st.selectbox("Order ID", ["1001", "1002"])
-        if st.button(f"Download PDF {order_sel}"):
-            st.success(f"PDF voor {order_sel} gegenereerd.")
-        
-        st.divider()
-        st.metric(L['load_m'], f"{laadmeters} m")
-        st.write(f"**Efficiency:** {round((laadmeters/13.6)*100, 1)}%")
-        st.markdown("</div>", unsafe_allow_html=True)
+    tw, tv, tp, tt, tlm = calculate_metrics(mock_pallets)
+
+    # Statistieken Dashboard boven de 3D beeld
+    c1, c2, c3, c4, c5 = st.columns(5)
+    metrics = [
+        (L['stats_weight'], f"{tw} kg"),
+        (L['stats_vol'], f"{tv} m³"),
+        (L['stats_pal'], tp),
+        (L['stats_trucks'], tt),
+        (L['stats_lm'], f"{tlm} m")
+    ]
+    for i, (label, val) in enumerate(metrics):
+        with [c1, c2, c3, c4, c5][i]:
+            st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    # 3D Viewer
+    fig = go.Figure()
+    # Trailer Vloer (13.6m x 2.45m)
+    fig.add_trace(go.Mesh3d(x=[0, 1360, 1360, 0, 0, 1360, 1360, 0], y=[0, 0, 245, 245, 0, 0, 245, 245], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.4))
+    
+    for p in mock_pallets:
+        px, py, pz = p['pos']
+        pl, pb, ph = p['dim']
+        fig.add_trace(go.Mesh3d(
+            x=[px, px+pl, px+pl, px, px, px+pl, px+pl, px],
+            y=[py, py, py+pb, py+pb, py, py, py+pb, py+pb],
+            z=[pz, pz, pz, pz, pz+ph, pz+ph, pz+ph, pz+ph],
+            i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
+            color='#38bdf8', opacity=0.7, name=p['id']
+        ))
+
+    fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
+    st.plotly_chart(fig, use_container_width=True)
