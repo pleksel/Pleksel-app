@@ -82,119 +82,121 @@ T = {
 L = T[st.session_state.lang]
 
 
+
 # =========================================================
-# 3. SIDEBAR (Instellingen & Uitgebreide Template Upload)
+# 3. SIDEBAR (Instellingen & Template Upload)
 # =========================================================
 st.sidebar.title(L['settings'])
 st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
 
-# De oude vertrouwde toggles
+# Nieuwe Slider voor berekeningsmethode
+calc_mode = st.sidebar.select_slider(
+    "Berekeningsmethode",
+    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
+    value="Handmatig (Volle units)",
+    help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
+)
+
 mix_boxes = st.sidebar.toggle(L['mix'], value=False)
 opt_stack = st.sidebar.toggle(L['stack'], value=True)
 opt_orient = st.sidebar.toggle(L['orient'], value=True)
 
 st.sidebar.divider()
 
-# Verbeterde Template Download (met de 4 benodigde tabbladen)
-buffer = io.BytesIO()
-with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
+# Template Download (4 tabbladen)
+buffer_dl = io.BytesIO()
+with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
     pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
     pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
     pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
     pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
 
-st.sidebar.download_button(
-    label=L['download'],
-    data=buffer.getvalue(),
-    file_name="pleksel_template.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "pleksel_template.xlsx")
 
-# Uitgebreide Template Upload
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
-
 if uploaded_file:
     try:
-        # Open het Excel bestand
         xls = pd.ExcelFile(uploaded_file)
-        
-        # Lees de specifieke tabbladen in en zet ze in de session_state
-        # .fillna(0) zorgt dat lege cellen geen errors veroorzaken
         st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
         st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
         st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
-        
-        st.sidebar.success("Bestand succesvol geladen! Data is verdeeld over de tabs.")
-    except Exception as e:
-        st.sidebar.error(f"Fout bij laden. Controleer of alle tabbladen (Item Data, Box Data, etc.) bestaan.")
+        st.sidebar.success("Geladen!")
+    except:
+        st.sidebar.error("Fout in bestand.")
 # =========================================================
-# 4. REKEN ENGINE (VERPAKKINGS-HIERARCHIE)
+# 4. REKEN ENGINE (DYNAMISCHE LOGICA)
 # =========================================================
 def calculate_metrics():
-    # 1. Haal data op uit de editor/state
-    # We proberen de data uit de session_state te halen als die er is, anders uit de editor keys
-    items = st.session_state.get('item_editor', pd.DataFrame())
-    orders = st.session_state.get('order_editor', pd.DataFrame())
-    boxes = st.session_state.get('box_editor', pd.DataFrame())
-    pallets_cfg = st.session_state.get('pallet_editor', pd.DataFrame())
+    # Veiligheidscheck voor data
+    orders = st.session_state.get('df_orders', pd.DataFrame())
+    items = st.session_state.get('df_items', pd.DataFrame())
+    pallets_cfg = st.session_state.get('df_pallets', pd.DataFrame())
 
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    # 2. Merge Order met Item data
-    # Zorg dat we kolommen hebben: ItemNr, L, B, H, Kg, Aantal
+    # Merge data
     df = pd.merge(orders, items, on="ItemNr", how="left").fillna(0)
     
-    total_weight = 0
-    total_volume = 0
-    calculated_pallets = []
+    total_w = 0
+    total_v = 0
+    units_to_load = []
     
-    # Simpele aanname voor berekening (Box-fit & Pallet-fit)
-    # In een echte scenario zou je hier een Bin Packing algoritme gebruiken.
-    # Hier berekenen we het op basis van volume-capaciteit.
-    
-    for _, row in df.iterrows():
-        qty = int(row['Aantal'])
-        item_vol = row['L'] * row['B'] * row['H']
-        total_weight += qty * row['Kg']
-        total_volume += (qty * item_vol) / 1000000
+    # Haal pallet data op (indien aanwezig)
+    p_l = pallets_cfg.iloc[0]['L_cm'] if not pallets_cfg.empty else 120
+    p_b = pallets_cfg.iloc[0]['B_cm'] if not pallets_cfg.empty else 80
+    p_h_max = pallets_cfg.iloc[0]['MaxH_cm'] if not pallets_cfg.empty else 200
 
-    # 3. Bereken aantal pallets (Voorbeeld-logica: 1.5m3 per pallet of max hoogte)
-    # We gebruiken de eerste pallet uit de lijst als standaard
-    if not pallets_cfg.empty:
-        p_l = pallets_cfg.iloc[0]['L']
-        p_b = pallets_cfg.iloc[0]['B']
-        p_max_h = pallets_cfg.iloc[0]['MaxH']
-        p_vol_cap = (p_l * p_b * p_max_h) * 0.85 # 85% efficiëntie
+    if "Handmatig" in calc_mode:
+        # LOGICA: Elke order-regel * aantal is een losse unit (bijv. volle pallets/dozen)
+        for _, row in df.iterrows():
+            qty = int(row['Aantal'])
+            for i in range(qty):
+                units_to_load.append({
+                    'id': f"{row['ItemNr']}_{i}",
+                    'dim': [row['L_cm'], row['B_cm'], row['H_cm']],
+                    'weight': row['Kg']
+                })
+            total_w += qty * row['Kg']
+            total_v += (qty * (row['L_cm'] * row['B_cm'] * row['H_cm'])) / 1000000
     else:
-        p_l, p_b, p_max_h, p_vol_cap = 120, 80, 200, 1800000
-    
-    # Bereken benodigde pallets op basis van totaal volume vs pallet capaciteit
-    total_item_vol_cm3 = total_volume * 1000000
-    num_pallets = int(np.ceil(total_item_vol_cm3 / p_vol_cap)) if total_item_vol_cm3 > 0 else 0
-    
-    # 4. Genereer pallet posities voor 3D viewer
-    current_x = 0
-    for i in range(num_pallets):
-        # We plaatsen pallets 2-dik (naast elkaar op de Y-as)
-        y_pos = 0 if i % 2 == 0 else 85
-        if i > 0 and i % 2 == 0:
-            current_x += p_l + 5
-            
-        calculated_pallets.append({
-            'id': f'Pallet_{i+1}',
-            'weight': total_weight / num_pallets if num_pallets > 0 else 0,
-            'dim': [p_l, p_b, p_max_h * 0.7], # We vullen ze voor 70% voor het zicht
-            'pos': [current_x, y_pos, 0]
-        })
+        # LOGICA: Automatisch verpakken op basis van volume
+        total_item_vol = 0
+        for _, row in df.iterrows():
+            qty = int(row['Aantal'])
+            total_item_vol += qty * (row['L_cm'] * row['B_cm'] * row['H_cm'])
+            total_w += qty * row['Kg']
+        
+        total_v = total_item_vol / 1000000
+        cap_per_pallet = (p_l * p_b * p_h_max) * 0.85
+        num_p = int(np.ceil(total_item_vol / cap_per_pallet)) if total_item_vol > 0 else 0
+        
+        for i in range(num_p):
+            units_to_load.append({
+                'id': f"Pallet_{i}",
+                'dim': [p_l, p_b, p_h_max * 0.8],
+                'weight': total_w / num_p if num_p > 0 else 0
+            })
 
-    # 5. Finale statistieken
-    lm = round((current_x + p_l) / 100, 2) if num_pallets > 0 else 0
+    # Positioneren voor 3D Viewer (2-dik laden)
+    positioned_units = []
+    curr_x = 0
+    for idx, unit in enumerate(units_to_load):
+        y_pos = 0 if idx % 2 == 0 else 85
+        positioned_units.append({
+            'id': unit['id'],
+            'dim': unit['dim'],
+            'pos': [curr_x, y_pos, 0],
+            'weight': unit['weight']
+        })
+        if idx % 2 != 0: curr_x += unit['dim'][0] + 5
+
+    num_units = len(units_to_load)
+    lm = round((curr_x + 120) / 100, 2) if num_units > 0 else 0
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
     
-    return round(total_weight, 1), round(total_volume, 2), num_pallets, trucks, lm, calculated_pallets
-
+    return round(total_w, 1), round(total_v, 2), num_units, trucks, lm, positioned_units
 # =========================================================
 # 5. UI TABS (DAARNÁ AANROEPEN)
 # =========================================================
@@ -239,6 +241,7 @@ with tab_calc:
 
     fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
