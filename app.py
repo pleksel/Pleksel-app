@@ -125,10 +125,9 @@ if uploaded_file:
     except:
         st.sidebar.error("Fout in bestand.")
 # =========================================================
-# 4. REKEN ENGINE (DYNAMISCHE LOGICA)
+# 4. REKEN ENGINE (SLIMME POSITIONERING)
 # =========================================================
 def calculate_metrics():
-    # Veiligheidscheck voor data in session_state
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
     pallets_cfg = st.session_state.get('df_pallets', pd.DataFrame())
@@ -136,73 +135,80 @@ def calculate_metrics():
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    # Merge data en forceer types voor betrouwbare match
+    # Data voorbereiden
     orders_cp = orders.copy()
     items_cp = items.copy()
     orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
     items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
-    
     df = pd.merge(orders_cp, items_cp, on="ItemNr", how="left").fillna(0)
     
-    total_w = 0
-    total_v = 0
     units_to_load = []
+    total_w = 0
     
-    # Haal pallet data op (indien aanwezig)
-    p_l = float(pallets_cfg.iloc[0]['L_cm']) if not pallets_cfg.empty else 120.0
-    p_b = float(pallets_cfg.iloc[0]['B_cm']) if not pallets_cfg.empty else 80.0
-    p_h_max = float(pallets_cfg.iloc[0]['MaxH_cm']) if not pallets_cfg.empty else 200.0
-
-    if "Handmatig" in calc_mode:
-        # LOGICA: Elke order-regel * aantal is een losse unit
-        for _, row in df.iterrows():
-            qty = int(row['Aantal'])
-            for i in range(qty):
-                units_to_load.append({
-                    'id': f"{row['ItemNr']}_{i}",
-                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                    'weight': float(row['Kg'])
-                })
-            total_w += qty * float(row['Kg'])
-            total_v += (qty * (float(row['L_cm']) * float(row['B_cm']) * float(row['H_cm']))) / 1000000
-    else:
-        # LOGICA: Automatisch verpakken op basis van volume
-        total_item_vol = 0
-        for _, row in df.iterrows():
-            qty = int(row['Aantal'])
-            total_item_vol += qty * (float(row['L_cm']) * float(row['B_cm']) * float(row['H_cm']))
-            total_w += qty * float(row['Kg'])
-        
-        total_v = total_item_vol / 1000000
-        cap_per_pallet = (p_l * p_b * p_h_max) * 0.85
-        num_p = int(np.ceil(total_item_vol / cap_per_pallet)) if total_item_vol > 0 else 0
-        
-        for i in range(num_p):
+    # Stap 1: Verzamel alle units die geladen moeten worden
+    for _, row in df.iterrows():
+        qty = int(row['Aantal'])
+        for i in range(qty):
             units_to_load.append({
-                'id': f"Pallet_{i}",
-                'dim': [p_l, p_b, p_h_max * 0.8],
-                'weight': total_w / num_p if num_p > 0 else 0
+                'id': f"{row['ItemNr']}_{i}",
+                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                'weight': float(row['Kg'])
             })
+        total_w += qty * float(row['Kg'])
 
-    # Positioneren voor 3D Viewer (2-dik laden op Y-as)
+    # Stap 2: Slimme Positionering (2 breed of 3 breed)
     positioned_units = []
     curr_x = 0
-    for idx, unit in enumerate(units_to_load):
-        y_pos = 0 if idx % 2 == 0 else 85
-        positioned_units.append({
-            'id': unit['id'],
-            'dim': unit['dim'],
-            'pos': [curr_x, y_pos, 0],
-            'weight': unit['weight']
-        })
-        if idx % 2 != 0: 
-            curr_x += unit['dim'][0] + 5
+    max_y = 245  # Trailer breedte
+    
+    i = 0
+    while i < len(units_to_load):
+        unit = units_to_load[i]
+        l, b = unit['dim'][0], unit['dim'][1]
+        
+        # Check voor 3-breed laden (Euro-pallets op de korte kant: 80+80+80 = 240)
+        if b <= 81 and (i + 2) < len(units_to_load) and units_to_load[i+1]['dim'][1] <= 81 and units_to_load[i+2]['dim'][1] <= 81:
+            # Laad er 3 naast elkaar (80cm kant in de breedte, 120cm in de lengte)
+            for j in range(3):
+                positioned_units.append({
+                    'id': units_to_load[i+j]['id'],
+                    'dim': units_to_load[i+j]['dim'],
+                    'pos': [curr_x, j * 81, 0],
+                    'weight': units_to_load[i+j]['weight']
+                })
+            curr_x += 120 # Lengte van een euro-pallet
+            i += 3
+        
+        # Check voor 2-breed laden (120 + 120 = 240)
+        elif l <= 121 and (i + 1) < len(units_to_load) and units_to_load[i+1]['dim'][0] <= 121:
+            # Laad er 2 naast elkaar (120cm kant in de breedte, 80cm in de lengte)
+            for j in range(2):
+                # We draaien de unit visueel om breed te laden
+                positioned_units.append({
+                    'id': units_to_load[i+j]['id'],
+                    'dim': [80, 120, units_to_load[i+j]['dim'][2]],
+                    'pos': [curr_x, j * 122, 0],
+                    'weight': units_to_load[i+j]['weight']
+                })
+            curr_x += 80 # We laden over de 80 kant
+            i += 2
+            
+        else:
+            # Past niet slim, laad enkel in het midden of links
+            positioned_units.append({
+                'id': unit['id'],
+                'dim': unit['dim'],
+                'pos': [curr_x, 0, 0],
+                'weight': unit['weight']
+            })
+            curr_x += l + 5
+            i += 1
 
-    num_units = len(units_to_load)
-    lm = round((curr_x + (p_l if num_units > 0 else 0)) / 100, 2)
+    total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in positioned_units)
+    lm = round(curr_x / 100, 2)
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
     
-    return round(total_w, 1), round(total_v, 2), num_units, trucks, lm, positioned_units
+    return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
 
 # =========================================================
 # 5. UI TABS
@@ -251,5 +257,6 @@ with tab_calc:
 
     fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
     st.plotly_chart(fig, use_container_width=True)
+
 
 
