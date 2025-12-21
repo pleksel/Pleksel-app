@@ -83,45 +83,36 @@ L = T[st.session_state.lang]
 
 
 # =========================================================
-# 3. SIDEBAR (Template met Item, Box, Pallet en Order Data)
+# 3. SIDEBAR & UPLOAD LOGICA (VERBETERD)
 # =========================================================
 st.sidebar.title(L['settings'])
-st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
-
-mix_boxes = st.sidebar.toggle(L['mix'], value=False)
-opt_stack = st.sidebar.toggle(L['stack'], value=True)
-opt_orient = st.sidebar.toggle(L['orient'], value=True)
+st.session_state.lang = st.sidebar.selectbox("Language", ["NL"])
 
 st.sidebar.divider()
 
-# Template genereren met 4 tabbladen
-buffer = io.BytesIO()
-with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-    # Tab 1: De artikelen (Master Data)
-    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar_JaNee"]).to_excel(writer, sheet_name='Item Data', index=False)
-    
-    # Tab 2: De dozen (Master Data)
+# Template genereren
+buffer_dl = io.BytesIO()
+with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
+    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
     pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
-    
-    # Tab 3: De pallets (Master Data)
     pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
-    
-    # Tab 4: De feitelijke bestelling (Order Data)
     pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
 
-# Download knop
-st.sidebar.download_button(
-    label=L['download'],
-    data=buffer.getvalue(),
-    file_name="pleksel_full_template.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "template.xlsx")
 
-# Template Upload
-uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx', 'csv'])
+# Upload en Verwerk
+uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
 if uploaded_file:
-    st.sidebar.success("Bestand succesvol geladen!")
-
+    try:
+        xls = pd.ExcelFile(uploaded_file)
+        # We overschrijven de session_state direct
+        st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
+        st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
+        st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
+        st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
+        st.sidebar.success("Data geladen! Ga naar PLANNING.")
+    except Exception as e:
+        st.sidebar.error(f"Check tabblad namen: {e}")
 # =========================================================
 # 4. REKEN ENGINE (GEKOPPELD AAN DATA & VIEWER)
 # =========================================================
@@ -222,4 +213,5 @@ with tab_calc:
         margin=dict(l=0,r=0,b=0,t=0)
     )
     st.plotly_chart(fig, use_container_width=True)
+
 
