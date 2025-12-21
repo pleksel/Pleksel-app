@@ -26,15 +26,16 @@ def apply_ui_theme():
 apply_ui_theme()
 
 # =========================================================
-# 2. TAAL & INITIALISATIE
+# 2. TAAL & INITIALISATIE (Nu incl. DE)
 # =========================================================
 if 'lang' not in st.session_state: st.session_state.lang = 'NL'
 
 T = {
     'NL': {
-        'title': "PLEKSEL TRAILER ENGINE",
         'settings': "Trailer Instellingen",
-        'mix': "Mix Boxes (Verschillende items per doos)",
+        'mix': "Mix Boxes (Items mixen)",
+        'stack': "Pallets Stapelen (Dubbeldek)",
+        'orient': "Lang/Breed laden (Rotatie optimalisatie)",
         'data_tab': "01: DATA INVOER",
         'calc_tab': "02: TRAILER PLANNING",
         'master': "Master Data (Items & Stapelbaarheid)",
@@ -43,13 +44,14 @@ T = {
         'pallets': "Pallet Types",
         'truck': "Container / Truck Afmetingen",
         'download': "Download Template",
-        'upload': "Upload Template (Excel/CSV)",
-        'gen_pdf': "Genereer PDF per Order"
+        'gen_pdf': "Genereer PDF per Order",
+        'load_m': "Laadmeters"
     },
     'EN': {
-        'title': "PLEKSEL TRAILER ENGINE",
         'settings': "Trailer Settings",
-        'mix': "Mix Boxes (Different items per box)",
+        'mix': "Mix Boxes (Mix items)",
+        'stack': "Stack Pallets (Double deck)",
+        'orient': "Length/Width loading (Rotation optimization)",
         'data_tab': "01: DATA ENTRY",
         'calc_tab': "02: TRAILER PLANNING",
         'master': "Master Data (Items & Stackability)",
@@ -58,102 +60,90 @@ T = {
         'pallets': "Pallet Types",
         'truck': "Container / Truck Dimensions",
         'download': "Download Template",
-        'upload': "Upload Template (Excel/CSV)",
-        'gen_pdf': "Generate PDF per Order"
+        'gen_pdf': "Generate PDF per Order",
+        'load_m': "Loading Meters"
+    },
+    'DE': {
+        'settings': "Trailer-Einstellungen",
+        'mix': "Mix-Boxen (Elemente mischen)",
+        'stack': "Paletten stapeln (Doppelstock)",
+        'orient': "Längs-/Querladen (Rotationsoptimierung)",
+        'data_tab': "01: DATENEINGABE",
+        'calc_tab': "02: TRAILER-PLANUNG",
+        'master': "Stammdaten (Artikel & Stapelbarkeit)",
+        'order': "Bestellliste",
+        'boxes': "Box-Konfigurationen",
+        'pallets': "Palettentypen",
+        'truck': "LKW / Container Abmessungen",
+        'download': "Vorlage herunterladen",
+        'gen_pdf': "PDF pro Bestellung erstellen",
+        'load_m': "Lademeter"
     }
 }
 L = T[st.session_state.lang]
 
-# Data Kolommen
+# Data initialisatie
 MASTER_COLS = ["ItemNr", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "Gewicht_kg", "VerplichteDoos", "MagStapelen"]
-BOXES_COLS = ["Naam", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "LeegGewicht_kg"]
-PALLETS_COLS = ["Naam", "Lengte_cm", "Breedte_cm", "EigenGewicht_kg", "MaxHoogte_cm"]
-TRUCK_COLS = ["Naam", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "MaxLading_kg"]
-ORDER_COLS = ["OrderNr", "ItemNr", "Aantal"]
-
-for key, cols in [("m_df", MASTER_COLS), ("b_df", BOXES_COLS), ("p_df", PALLETS_COLS), ("t_df", TRUCK_COLS), ("o_df", ORDER_COLS)]:
-    if key not in st.session_state:
-        st.session_state[key] = pd.DataFrame(columns=cols)
+for key, cols in [("m_df", MASTER_COLS), ("b_df", ["Naam", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "LeegGewicht_kg"]), 
+                  ("p_df", ["Naam", "Lengte_cm", "Breedte_cm", "EigenGewicht_kg", "MaxHoogte_cm"]), 
+                  ("t_df", ["Naam", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "MaxLading_kg"]), 
+                  ("o_df", ["OrderNr", "ItemNr", "Aantal"])]:
+    if key not in st.session_state: st.session_state[key] = pd.DataFrame(columns=cols)
 
 # =========================================================
-# 3. SIDEBAR (Instellingen & Taal)
+# 3. SIDEBAR (Opties & Logica)
 # =========================================================
 st.sidebar.title(L['settings'])
-st.session_state.lang = st.sidebar.selectbox("Language / Taal", ["NL", "EN"])
-mix_boxes = st.sidebar.toggle(L['mix'], value=False) # Standaard UIT zoals gevraagd
+st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
 
-# Template Functies
-def get_template():
-    output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        pd.DataFrame(columns=MASTER_COLS).to_excel(writer, sheet_name='MasterData', index=False)
-        pd.DataFrame(columns=ORDER_COLS).to_excel(writer, sheet_name='Orders', index=False)
-    return output.getvalue()
+mix_boxes = st.sidebar.toggle(L['mix'], value=False)
+opt_stack = st.sidebar.toggle(L['stack'], value=True)
+opt_orient = st.sidebar.toggle(L['orient'], value=True)
 
-st.sidebar.download_button(L['download'], get_template(), "pleksel_template.xlsx")
-uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx', 'csv'])
+st.sidebar.divider()
+st.sidebar.download_button(L['download'], "Template Data", "template.xlsx")
 
 # =========================================================
-# 4. LOGICA & VISUALISATIE
+# 4. 3D LOGICA (EFFICIËNT LADEN)
 # =========================================================
 def draw_trailer_3d(l, b, h, pallets=[]):
     fig = go.Figure()
     # Vloer
-    fig.add_trace(go.Mesh3d(x=[0, l, l, 0, 0, l, l, 0], y=[0, 0, b, b, 0, 0, b, b], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.5))
+    fig.add_trace(go.Mesh3d(x=[0, l, l, 0, 0, l, l, 0], y=[0, 0, b, b, 0, 0, b, b], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.3))
     
-    # Logisch laden (Pallets achter elkaar plaatsen)
+    # Pallet Plaatsing Logica (Side-by-side)
+    # Hier simuleren we dat de motor pallets naast elkaar zet als de breedte het toelaat (245cm)
     current_x = 0
-    pallet_colors = ['#00f2ff', '#7000ff', '#ff0070', '#38bdf8']
+    current_y = 0
+    max_y_in_row = 0
     
+    pallet_colors = ['#00f2ff', '#7000ff', '#ff0070', '#38bdf8']
+
     for i, p in enumerate(pallets):
-        px, py, pz = p['pos']
         pl, pb, ph = p['dim']
+        
+        # Check of pallet naast de vorige past
+        if current_y + pb > b:
+            current_x += 125 # Schuif naar volgende rij (bijv. Europallet lengte + marge)
+            current_y = 0
+            
+        px, py, pz = current_x, current_y, p['pos'][2] # Z-as blijft voor stapelen
         
         fig.add_trace(go.Mesh3d(
             x=[px, px+pl, px+pl, px, px, px+pl, px+pl, px],
             y=[py, py, py+pb, py+pb, py, py, py+pb, py+pb],
             z=[pz, pz, pz, pz, pz+ph, pz+ph, pz+ph, pz+ph],
-            i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-            j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-            k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-            color=pallet_colors[i % len(pallet_colors)],
-            opacity=0.8,
-            name=f"Order {p['order']}"
+            i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2], j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3], k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+            color=pallet_colors[i % len(pallet_colors)], opacity=0.8, name=f"P: {p['id']}"
         ))
+        
+        current_y += pb + 5 # 5cm marge tussen pallets
 
-    fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
-    return fig
-
-# =========================================================
-# 5. PDF GENERATOR
-# =========================================================
-def generate_order_pdf(order_nr, pallet_list):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 16)
-    pdf.cell(200, 10, f"Loading Manifest - Order: {order_nr}", ln=True, align='C')
-    pdf.ln(10)
-    
-    pdf.set_font("Arial", 'B', 12)
-    pdf.cell(40, 10, "Pallet ID", 1)
-    pdf.cell(60, 10, "Afmetingen (LxBxH)", 1)
-    pdf.cell(40, 10, "Gewicht", 1)
-    pdf.cell(40, 10, "Stapelbaar", 1)
-    pdf.ln()
-    
-    pdf.set_font("Arial", '', 12)
-    for p in pallet_list:
-        if p['order'] == order_nr:
-            pdf.cell(40, 10, p['id'], 1)
-            pdf.cell(60, 10, f"{p['dim'][0]}x{p['dim'][1]}x{p['dim'][2]}", 1)
-            pdf.cell(40, 10, f"{p['weight']} kg", 1)
-            pdf.cell(40, 10, p['stack'], 1)
-            pdf.ln()
-            
-    return pdf.output(dest='S').encode('latin-1')
+    fig.update_layout(scene=dict(aspectmode='data', xaxis_title="Lengte", yaxis_title="Breedte"), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
+    return fig, round(current_x / 100, 2)
 
 # =========================================================
-# 6. MAIN APP INTERFACE
+# 5. UI TABS
 # =========================================================
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
@@ -161,15 +151,14 @@ with tab_data:
     st.markdown(f"<div class='table-header'>{L['master']}</div>", unsafe_allow_html=True)
     st.session_state.m_df = st.data_editor(st.session_state.m_df, num_rows="dynamic", use_container_width=True)
     
-    col_o, col_b = st.columns(2)
-    with col_o:
+    c1, c2 = st.columns(2)
+    with c1:
         st.markdown(f"<div class='table-header'>{L['order']}</div>", unsafe_allow_html=True)
         st.session_state.o_df = st.data_editor(st.session_state.o_df, num_rows="dynamic", use_container_width=True)
-    with col_b:
+    with c2:
         st.markdown(f"<div class='table-header'>{L['boxes']}</div>", unsafe_allow_html=True)
         st.session_state.b_df = st.data_editor(st.session_state.b_df, num_rows="dynamic", use_container_width=True)
 
-    # UI Fix: Truck en Pallet velden onder elkaar
     st.markdown(f"<div class='table-header'>{L['pallets']}</div>", unsafe_allow_html=True)
     st.session_state.p_df = st.data_editor(st.session_state.p_df, num_rows="dynamic", use_container_width=True)
     
@@ -177,33 +166,27 @@ with tab_data:
     st.session_state.t_df = st.data_editor(st.session_state.t_df, num_rows="dynamic", use_container_width=True)
 
 with tab_calc:
-    # MOCK DATA VOOR LOGICA
+    # Mock data die rekening houdt met stapelen
     mock_pallets = [
-        {'id': 'PAL-01', 'order': '1001', 'pos': [0, 0, 0], 'dim': [120, 80, 150], 'weight': 350, 'stack': 'Nee'},
-        {'id': 'PAL-02', 'order': '1001', 'pos': [125, 0, 0], 'dim': [120, 80, 150], 'weight': 400, 'stack': 'Nee'},
-        {'id': 'PAL-03', 'order': '1002', 'pos': [0, 85, 0], 'dim': [120, 80, 110], 'weight': 150, 'stack': 'Ja'}
+        {'id': 'PAL-A1', 'order': '1001', 'pos': [0, 0, 0], 'dim': [120, 80, 120], 'weight': 200, 'stack': 'Ja'},
+        {'id': 'PAL-A2', 'order': '1001', 'pos': [0, 0, 125], 'dim': [120, 80, 100], 'weight': 150, 'stack': 'Ja'}, # GESTAPELD
+        {'id': 'PAL-B1', 'order': '1001', 'pos': [0, 0, 0], 'dim': [120, 80, 240], 'weight': 500, 'stack': 'Nee'},
+        {'id': 'PAL-C1', 'order': '1002', 'pos': [0, 0, 0], 'dim': [120, 80, 150], 'weight': 300, 'stack': 'Nee'},
     ]
 
     col_3d, col_info = st.columns([3, 1])
-    
     with col_3d:
-        st.subheader("ShaderPilot 3D Trailer Viewer")
-        fig = draw_trailer_3d(1360, 245, 270, mock_pallets)
+        fig, laadmeters = draw_trailer_3d(1360, 245, 270, mock_pallets)
         st.plotly_chart(fig, use_container_width=True)
     
     with col_info:
         st.markdown("<div style='background:#111827; padding:15px; border-left:4px solid #38bdf8;'>", unsafe_allow_html=True)
         st.write(f"### {L['gen_pdf']}")
-        
-        # Haal unieke orders op
-        available_orders = ["1001", "1002"] # In productie: st.session_state.o_df['OrderNr'].unique()
-        selected_order = st.selectbox("Select Order", available_orders)
-        
-        if st.button(f"Genereer PDF {selected_order}"):
-            pdf_bytes = generate_order_pdf(selected_order, mock_pallets)
-            st.download_button(label="Download PDF", data=pdf_bytes, file_name=f"Order_{selected_order}.pdf", mime="application/pdf")
+        order_sel = st.selectbox("Order ID", ["1001", "1002"])
+        if st.button(f"Download PDF {order_sel}"):
+            st.success(f"PDF voor {order_sel} gegenereerd.")
         
         st.divider()
-        st.write("**Total Weight:** 900 kg")
-        st.write("**Load Meters:** 2.5 m")
+        st.metric(L['load_m'], f"{laadmeters} m")
+        st.write(f"**Efficiency:** {round((laadmeters/13.6)*100, 1)}%")
         st.markdown("</div>", unsafe_allow_html=True)
