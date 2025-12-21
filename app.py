@@ -125,21 +125,23 @@ if uploaded_file:
     except:
         st.sidebar.error("Fout in bestand.")
 # =========================================================
-# 4. REKEN ENGINE (SLIMME POSITIONERING & STAPELEN)
+# 4. REKEN ENGINE (GEFIKSTE KOLOMNAMEN)
 # =========================================================
 def calculate_metrics():
-    # Haal data direct uit de editor-states
-    # Als een editor leeg is, gebruiken we een leeg dataframe
-    df_items = st.session_state.get('ed_items', {"added_rows": [], "edited_rows": {}, "deleted_rows": []})
-    df_orders = st.session_state.get('ed_orders', {"added_rows": [], "edited_rows": {}, "deleted_rows": []})
-    
-    # Om de berekening te laten werken, gebruiken we de dataframes uit session_state
-    # Deze worden in Sectie 5 bijgewerkt
-    orders = st.session_state.df_orders
-    items = st.session_state.df_items
+    # Haal de dataframes op uit de session_state
+    orders = st.session_state.get('df_orders', pd.DataFrame())
+    items = st.session_state.get('df_items', pd.DataFrame())
 
-    if orders.empty or items.empty or "ItemNr" not in orders.columns:
+    # Controleer of de cruciale kolommen bestaan om KeyErrors te voorkomen
+    if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
+    
+    # We checken of de kolommen die we nodig hebben er wel zijn
+    required_item_cols = ['ItemNr', 'L_cm', 'B_cm', 'H_cm', 'Kg']
+    if not all(col in items.columns for col in required_item_cols):
+        # Als de kolommen L_cm etc niet bestaan, proberen we de korte namen L, B, H
+        # Dit vangt verschillen tussen handmatige invoer en Excel upload op
+        items = items.rename(columns={'L': 'L_cm', 'B': 'B_cm', 'H': 'H_cm'})
 
     # Voorbereiden en koppelen
     orders_cp = orders.copy()
@@ -154,23 +156,28 @@ def calculate_metrics():
     # Alle units verzamelen
     units_to_load = []
     for _, row in df.iterrows():
-        for i in range(int(row['Aantal'])):
-            units_to_load.append({
-                'id': f"{row['ItemNr']}_{i}",
-                'dim': [float(row['L']), float(row['B']), float(row['H'])],
-                'weight': float(row['Kg'])
-            })
+        try:
+            qty = int(row['Aantal'])
+            for i in range(qty):
+                units_to_load.append({
+                    'id': f"{row['ItemNr']}_{i}",
+                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                    'weight': float(row['Kg'])
+                })
+        except KeyError as e:
+            st.error(f"Kolom mist in data: {e}")
+            return 0, 0, 0, 0, 0, []
 
     positioned_units = []
     curr_x = 0
     i = 0
     
-    # SLIM LADEN LOGICA
+    # SLIM LADEN LOGICA (Breed laden indien mogelijk)
     while i < len(units_to_load):
         u1 = units_to_load[i]
         l, b = u1['dim'][0], u1['dim'][1]
 
-        # OPTIE A: 3-BREED (Euro-pallets op 80cm zijde: 3x80 = 240cm)
+        # OPTIE A: 3-BREED (bijv. 3x80cm = 240cm)
         if b <= 81 and (i + 2) < len(units_to_load) and units_to_load[i+1]['dim'][1] <= 81 and units_to_load[i+2]['dim'][1] <= 81:
             for j in range(3):
                 positioned_units.append({
@@ -179,23 +186,21 @@ def calculate_metrics():
                     'pos': [curr_x, j * 81, 0],
                     'weight': units_to_load[i+j]['weight']
                 })
-            curr_x += 121 # Lengte van de pallet (120)
+            curr_x += 121 
             i += 3
 
-        # OPTIE B: 2-BREED (Pallets op 120cm zijde gedraaid: 2x120 = 240cm)
+        # OPTIE B: 2-BREED (bijv. 2x120cm = 240cm) - Pallet wordt gedraaid
         elif l <= 121 and (i + 1) < len(units_to_load) and units_to_load[i+1]['dim'][0] <= 121:
             for j in range(2):
-                # We draaien ze: L wordt 80, B wordt 120
                 positioned_units.append({
                     'id': units_to_load[i+j]['id'],
                     'dim': [80, 120, units_to_load[i+j]['dim'][2]],
                     'pos': [curr_x, j * 121, 0],
                     'weight': units_to_load[i+j]['weight']
                 })
-            curr_x += 81 # De nieuwe 'lengte' is nu de 80cm zijde
+            curr_x += 81 
             i += 2
 
-        # OPTIE C: ENKEL LADEN (Te groot of rest)
         else:
             positioned_units.append({
                 'id': u1['id'],
@@ -214,13 +219,12 @@ def calculate_metrics():
     return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
 
 # =========================================================
-# 5. UI TABS (MET SYNC-FIX)
+# 5. UI TABS
 # =========================================================
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
     t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
-    # Cruciaal: st.session_state wordt direct geupdate door de editor
     with t1:
         st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
     with t2:
@@ -231,10 +235,8 @@ with tab_data:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
 
 with tab_calc:
-    # Berekening uitvoeren
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
 
-    # Statistieken Dashboard
     c1, c2, c3, c4, c5 = st.columns(5)
     metrics = [(L['stats_weight'], f"{res_w} kg"), (L['stats_vol'], f"{res_v} m³"), (L['stats_pal'], res_p), (L['stats_trucks'], res_t), (L['stats_lm'], f"{res_lm} m")]
     for i, (label, val) in enumerate(metrics):
@@ -243,9 +245,8 @@ with tab_calc:
 
     st.divider()
 
-    # 3D Viewer
     fig = go.Figure()
-    # Trailer Vloer (13.6m bij 2.45m)
+    # Grondvlak trailer
     fig.add_trace(go.Mesh3d(x=[0, 1360, 1360, 0, 0, 1360, 1360, 0], y=[0, 0, 245, 245, 0, 0, 245, 245], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.4))
     
     for p in active_units:
@@ -259,5 +260,5 @@ with tab_calc:
             color='#38bdf8', opacity=0.8, name=p['id']
         ))
 
-    fig.update_layout(scene=dict(aspectmode='data', xaxis_title='L', yaxis_title='B', zaxis_title='H'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
+    fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
     st.plotly_chart(fig, use_container_width=True)
