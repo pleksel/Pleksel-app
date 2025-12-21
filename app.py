@@ -357,66 +357,77 @@ def calculate_metrics():
 
 
 # =========================================================
-    # 5. UI TABS (VERVOLG - SECTOR 5: 3D VISUALISATIE)
-    # =========================================================
-    st.subheader("3D Trailer Layout")
 
-    if not active_units:
-        st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
-    else:
-        fig = go.Figure()
+# 5. UI TABS (Gecorrigeerd)
 
-        # Kleurenpalet voor verschillende items
-        colors = ['#38bdf8', '#fbbf24', '#f87171', '#34d399', '#a78bfa', '#fb7185']
-        
-        for p in active_units:
-            l, b, h = p['dim']
-            x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
-            
-            # Unieke kleur per Item type (gebaseerd op ID prefix)
-            color_idx = hash(p['id'].split('_')[0]) % len(colors)
-            color = colors[color_idx]
+# =========================================================
 
-            # 3D Box constructie
-            fig.add_trace(go.Mesh3d(
-                x=[x, x, x+l, x+l, x, x, x+l, x+l],
-                y=[y, y+b, y+b, y, y, y+b, y+b, y],
-                z=[z_base, z_base, z_base, z_base, z_base+h, z_base+h, z_base+h, z_base+h],
-                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=color,
-                opacity=0.8,
-                name=f"ID: {p['id']}",
-                showlegend=False
-            ))
 
-        # Trailer contouren (Wanden ter referentie)
-        trailer_length = max(res_lm * 100, 1360)
-        fig.add_trace(go.Scatter3d(
-            x=[0, trailer_length, trailer_length, 0, 0],
-            y=[0, 0, 245, 245, 0],
-            z=[0, 0, 0, 0, 0],
-            mode='lines', line=dict(color='#38bdf8', width=4), name='Vloer'
-        ))
 
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0, trailer_length], backgroundcolor="#020408"),
-                yaxis=dict(title='Breedte (cm)', range=[0, 250], backgroundcolor="#020408"),
-                zaxis=dict(title='Hoogte (cm)', range=[0, 270], backgroundcolor="#020408"),
-                aspectmode='manual',
-                aspectratio=dict(x=3, y=1, z=1)
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, b=0, t=0),
-            height=600
-        )
+# Zorg dat de namen in de lijst exact overeenkomen met de variabelen die je aanroept
 
-        st.plotly_chart(fig, use_container_width=True)
+tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
-        # Detailoverzicht in Tabel
-        with st.expander("Gedetailleerde Laadlijst"):
-            st.table(pd.DataFrame(active_units))
 
+
+with tab_data:
+
+    t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
+
+    with t1:
+
+        st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
+
+    with t2:
+
+        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic", key="ed_boxes")
+
+    with t3:
+
+        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
+
+    with t4:
+
+        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
+
+
+
+with tab_calc:
+
+    # Hier begint de berekening pas nadat de tabs zijn aangemaakt
+
+    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
+
+
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    metrics = [
+
+        (L['stats_weight'], f"{res_w} kg"), 
+
+        (L['stats_vol'], f"{res_v} m³"), 
+
+        (L['stats_pal'], res_p), 
+
+        (L['stats_trucks'], res_t), 
+
+        (L['stats_lm'], f"{res_lm} m")
+
+    ]
+
+    
+
+    for i, (label, val) in enumerate(metrics):
+
+        with [c1, c2, c3, c4, c5][i]:
+
+            st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
+
+
+
+    st.divider()
+
+
+
+    # Plotly Chart logica volgt hieronder...
