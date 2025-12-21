@@ -357,147 +357,103 @@ def calculate_metrics():
 
 
 # =========================================================
+    # 5. UI TABS (VERVOLG - SECTOR 5: 3D VISUALISATIE)
+    # =========================================================
+    st.subheader("3D Trailer Layout")
 
-# 5. UI TABS (Gecorrigeerd)
+    if not active_units:
+        st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
+    else:
+        fig = go.Figure()
 
-# =========================================================
+        # Kleurenpalet voor verschillende items
+        colors = ['#38bdf8', '#fbbf24', '#f87171', '#34d399', '#a78bfa', '#fb7185']
+        
+        for p in active_units:
+            l, b, h = p['dim']
+            x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
+            
+            # Unieke kleur per Item type
+            color_idx = hash(str(p['id']).split('_')[0]) % len(colors)
+            color = colors[color_idx]
 
+            # 3D Box constructie
+            fig.add_trace(go.Mesh3d(
+                x=[x, x, x+l, x+l, x, x, x+l, x+l],
+                y=[y, y+b, y+b, y, y, y+b, y+b, y],
+                z=[z_base, z_base, z_base, z_base, z_base+h, z_base+h, z_base+h, z_base+h],
+                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+                color=color,
+                opacity=0.8,
+                name=f"ID: {p['id']}",
+                showlegend=False
+            ))
 
+        # Trailer contouren
+        trailer_length = max(res_lm * 100, 1360)
+        fig.update_layout(
+            scene=dict(
+                xaxis=dict(title='Lengte (cm)', range=[0, trailer_length]),
+                yaxis=dict(title='Breedte (cm)', range=[0, 250]),
+                zaxis=dict(title='Hoogte (cm)', range=[0, 270]),
+                aspectmode='manual',
+                aspectratio=dict(x=3, y=1, z=1)
+            ),
+            margin=dict(l=0, r=0, b=0, t=0),
+            height=600
+        )
 
-# Zorg dat de namen in de lijst exact overeenkomen met de variabelen die je aanroept
+        st.plotly_chart(fig, use_container_width=True)
 
-tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
-
-
-
-with tab_data:
-
-    t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
-
-    with t1:
-
-        st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
-
-    with t2:
-
-        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic", key="ed_boxes")
-
-    with t3:
-
-        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
-
-    with t4:
-
-        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
-
-
-
-with tab_calc:
-
-    # Hier begint de berekening pas nadat de tabs zijn aangemaakt
-
-    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
-
-
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-
-    metrics = [
-
-        (L['stats_weight'], f"{res_w} kg"), 
-
-        (L['stats_vol'], f"{res_v} m³"), 
-
-        (L['stats_pal'], res_p), 
-
-        (L['stats_trucks'], res_t), 
-
-        (L['stats_lm'], f"{res_lm} m")
-
-    ]
-
-    
-
-    for i, (label, val) in enumerate(metrics):
-
-        with [c1, c2, c3, c4, c5][i]:
-
-            st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
-
-
-
-    st.divider()
-
-
-
-    # Plotly Chart logica volgt hieronder...
-
-# =========================================================
-        # 6. EXPORT FUNCTIE (PDF MET VISUALISATIE)
+        # =========================================================
+        # 6. EXPORT FUNCTIE (PDF)
         # =========================================================
         st.divider()
+        
         if st.button("Genereer PDF Rapport"):
-            pdf = FPDF()
-            pdf.add_page()
-            
-            # Header
-            pdf.set_font("Arial", 'B', 16)
-            pdf.cell(190, 10, "PLEKSEL TRAILER LAADPLAN", ln=True, align='C')
-            pdf.set_font("Arial", '', 10)
-            pdf.cell(190, 10, f"Datum: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}", ln=True, align='C')
-            pdf.ln(10)
+            try:
+                pdf = FPDF()
+                pdf.add_page()
+                
+                # Header
+                pdf.set_font("Arial", 'B', 16)
+                pdf.cell(190, 10, "PLEKSEL TRAILER LAADPLAN", ln=True, align='C')
+                pdf.ln(10)
 
-            # Statistieken tabel
-            pdf.set_fill_color(56, 189, 248) # Pleksel Blauw
-            pdf.set_text_color(255, 255, 255)
-            pdf.set_font("Arial", 'B', 12)
-            pdf.cell(190, 10, " Transport Statistieken", ln=True, fill=True)
-            
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Arial", '', 10)
-            stats_data = [
-                ["Totaal Gewicht", f"{res_w} kg"],
-                ["Totaal Volume", f"{res_v} m3"],
-                ["Aantal Units", f"{res_p}"],
-                ["Laadmeters", f"{res_lm} m"]
-            ]
-            
-            for item in stats_data:
-                pdf.cell(95, 8, item[0], border=1)
-                pdf.cell(95, 8, item[1], border=1, ln=True)
-            
-            pdf.ln(10)
+                # Statistieken
+                pdf.set_fill_color(56, 189, 248) 
+                pdf.set_text_color(255, 255, 255)
+                pdf.set_font("Arial", 'B', 12)
+                pdf.cell(190, 10, " Transport Statistieken", ln=True, fill=True)
+                
+                pdf.set_text_color(0, 0, 0)
+                pdf.set_font("Arial", '', 10)
+                pdf.cell(95, 8, f"Totaal Gewicht: {res_w} kg", border=1)
+                pdf.cell(95, 8, f"Laadmeters: {res_lm} m", border=1, ln=True)
+                pdf.ln(5)
 
-            # Laadlijst Tabel
-            pdf.set_font("Arial", 'B', 12)
-            pdf.set_text_color(255, 255, 255)
-            pdf.cell(190, 10, " Gedetailleerde Laadlijst", ln=True, fill=True)
-            
-            pdf.set_text_color(0, 0, 0)
-            pdf.set_font("Arial", '', 9)
-            
-            # Tabel Headers
-            cols = ["ID", "L (cm)", "B (cm)", "H (cm)", "X-pos", "Z-hoogte"]
-            widths = [50, 28, 28, 28, 28, 28]
-            
-            for i, col in enumerate(cols):
-                pdf.cell(widths[i], 8, col, border=1, fill=False)
-            pdf.ln()
+                # Tabel
+                pdf.set_font("Arial", 'B', 10)
+                pdf.cell(50, 8, "Item ID", border=1)
+                pdf.cell(40, 8, "Afmetingen", border=1)
+                pdf.cell(50, 8, "Positie (X, Y)", border=1)
+                pdf.cell(50, 8, "Hoogte (Z)", border=1, ln=True)
 
-            # Tabel Data
-            for p in active_units:
-                pdf.cell(widths[0], 7, str(p['id']), border=1)
-                pdf.cell(widths[1], 7, str(p['dim'][0]), border=1)
-                pdf.cell(widths[2], 7, str(p['dim'][1]), border=1)
-                pdf.cell(widths[3], 7, str(p['dim'][2]), border=1)
-                pdf.cell(widths[4], 7, str(round(p['pos'][0])), border=1)
-                pdf.cell(widths[5], 7, str(round(p['pz'])), border=1, ln=True)
+                pdf.set_font("Arial", '', 9)
+                for p in active_units:
+                    pdf.cell(50, 7, str(p['id']), border=1)
+                    pdf.cell(40, 7, f"{p['dim'][0]}x{p['dim'][1]}", border=1)
+                    pdf.cell(50, 7, f"X:{round(p['pos'][0])} Y:{round(p['pos'][1])}", border=1)
+                    pdf.cell(50, 7, f"Z:{round(p['pz'])}", border=1, ln=True)
 
-            # Output PDF naar geheugen
-            pdf_output = pdf.output(dest='S').encode('latin-1')
-            st.download_button(
-                label="Download Laadplan PDF",
-                data=pdf_output,
-                file_name="pleksel_laadplan.pdf",
-                mime="application/pdf"
-            )
+                pdf_output = pdf.output(dest='S').encode('latin-1')
+                st.download_button(
+                    label="Download Laadplan PDF",
+                    data=pdf_output,
+                    file_name="pleksel_laadplan.pdf",
+                    mime="application/pdf"
+                )
+            except Exception as e:
+                st.error(f"PDF fout: {e}")
