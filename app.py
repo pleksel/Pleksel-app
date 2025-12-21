@@ -58,7 +58,7 @@ T = {
 L = T[st.session_state.lang]
 
 # =========================================================
-# 3. SIDEBAR
+# 3. SIDEBAR (Template met Item, Box, Pallet en Order Data)
 # =========================================================
 st.sidebar.title(L['settings'])
 st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
@@ -68,16 +68,34 @@ opt_stack = st.sidebar.toggle(L['stack'], value=True)
 opt_orient = st.sidebar.toggle(L['orient'], value=True)
 
 st.sidebar.divider()
-template_df = pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal", "Lengte_cm", "Breedte_cm", "Hoogte_cm", "Gewicht_kg"])
+
+# Template genereren met 4 tabbladen
 buffer = io.BytesIO()
 with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
-    template_df.to_excel(writer, index=False)
-st.sidebar.download_button(L['download'], buffer.getvalue(), "pleksel_template.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    # Tab 1: De artikelen (Master Data)
+    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar_JaNee"]).to_excel(writer, sheet_name='Item Data', index=False)
+    
+    # Tab 2: De dozen (Master Data)
+    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
+    
+    # Tab 3: De pallets (Master Data)
+    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
+    
+    # Tab 4: De feitelijke bestelling (Order Data)
+    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
 
+# Download knop
+st.sidebar.download_button(
+    label=L['download'],
+    data=buffer.getvalue(),
+    file_name="pleksel_full_template.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+# Template Upload
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx', 'csv'])
 if uploaded_file:
     st.sidebar.success("Bestand succesvol geladen!")
-
 # =========================================================
 # 4. REKEN ENGINE (SIMULATIE)
 # =========================================================
