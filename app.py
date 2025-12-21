@@ -357,7 +357,7 @@ def calculate_metrics():
 
 
 # =========================================================
-# 5. UI TABS & CALCULATIONS
+# 5. UI TABS & 3D CALCULATION ENGINE (COMPLETE SECTOR 5)
 # =========================================================
 
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
@@ -374,10 +374,10 @@ with tab_data:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
 
 with tab_calc:
-    # Berekening uitvoeren
+    # Voer berekening uit (houdt rekening met toggles uit de sidebar)
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
 
-    # Metrics weergeven
+    # Dashboard Metrics
     c1, c2, c3, c4, c5 = st.columns(5)
     metrics = [
         (L['stats_weight'], f"{res_w} kg"), 
@@ -386,28 +386,37 @@ with tab_calc:
         (L['stats_trucks'], res_t), 
         (L['stats_lm'], f"{res_lm} m")
     ]
-    
     for i, (label, val) in enumerate(metrics):
         with [c1, c2, c3, c4, c5][i]:
             st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # --- 3D VISUALISATIE ---
-    st.subheader("3D Trailer Layout")
+    # --- 3D INTERACTIEVE TRAILER ---
+    st.subheader("3D Trailer Layout & Legenda")
 
     if not active_units:
         st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
     else:
+        # Layout met kolom voor legenda
+        col_viz, col_leg = st.columns([4, 1])
+
         fig = go.Figure()
-        colors = ['#38bdf8', '#fbbf24', '#f87171', '#34d399', '#a78bfa', '#fb7185']
-        
+        colors = ['#0ea5e9', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4']
+        item_color_map = {}
+
         for p in active_units:
             l, b, h = p['dim']
             x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
-            color_idx = hash(str(p['id']).split('_')[0]) % len(colors)
             
-            # Voeg 3D box toe
+            # Kleur bepalen op basis van ItemNr (prefix van ID)
+            item_type = str(p['id']).split('_')[0]
+            if item_type not in item_color_map:
+                item_color_map[item_type] = colors[len(item_color_map) % len(colors)]
+            
+            base_color = item_color_map[item_type]
+
+            # 3D Mesh constructie (Shader look)
             fig.add_trace(go.Mesh3d(
                 x=[x, x, x+l, x+l, x, x, x+l, x+l],
                 y=[y, y+b, y+b, y, y, y+b, y+b, y],
@@ -415,22 +424,50 @@ with tab_calc:
                 i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
                 j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
                 k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=colors[color_idx], opacity=0.8, showlegend=False
+                color=base_color,
+                opacity=0.9,
+                flatshading=True,
+                name=f"Type: {item_type}",
+                hoverinfo="text",
+                customdata=[[item_type, l, b, h, p['weight'], "Ja" if p.get('stackable', True) else "Nee"]],
+                hovertemplate=(
+                    "<b>Item: %{customdata[0]}</b><br>" +
+                    "Afmetingen: %{customdata[1]}x%{customdata[2]}x%{customdata[3]} cm<br>" +
+                    "Gewicht: %{customdata[4]} kg<br>" +
+                    "Stapelbaar: %{customdata[5]}<br>" +
+                    "<extra></extra>"
+                )
             ))
 
-        # Trailer instellingen
+        # Trailer visualisatie instellingen
         trailer_len = max(res_lm * 100, 1360)
         fig.update_layout(
             scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0, trailer_len]),
-                yaxis=dict(title='Breedte (cm)', range=[0, 250]),
-                zaxis=dict(title='Hoogte (cm)', range=[0, 270]),
+                xaxis=dict(title='Lengte (cm)', range=[0, trailer_len], backgroundcolor="#0f172a"),
+                yaxis=dict(title='Breedte (cm)', range=[0, 245], backgroundcolor="#0f172a"),
+                zaxis=dict(title='Hoogte (cm)', range=[0, 270], backgroundcolor="#0f172a"),
                 aspectmode='manual',
                 aspectratio=dict(x=3, y=1, z=1)
             ),
-            margin=dict(l=0, r=0, b=0, t=0), height=500
+            paper_bgcolor='rgba(0,0,0,0)',
+            margin=dict(l=0, r=0, b=0, t=0),
+            showlegend=False
         )
-        st.plotly_chart(fig, use_container_width=True)
+
+        with col_viz:
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col_leg:
+            st.markdown("### Legenda")
+            for itype, icolor in item_color_map.items():
+                st.markdown(f"""
+                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                        <div style="width: 20px; height: 20px; background-color: {icolor}; border-radius: 4px; margin-right: 10px;"></div>
+                        <span>Item: {itype}</span>
+                    </div>
+                """, unsafe_allow_html=True)
+            
+            st.info(f"**Status:**\n- Mix: {'AAN' if mix_boxes else 'UIT'}\n- Stapel: {'AAN' if opt_stack else 'UIT'}\n- Orient: {'AAN' if opt_orient else 'UIT'}")
 
         # --- PDF EXPORT ---
         st.divider()
@@ -465,4 +502,5 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
