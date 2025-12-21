@@ -287,7 +287,33 @@ with tab_data:
     with t4:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
 with t5:
-    st.info("Hier komen de trailer- en containerinstellingen")
+    st.subheader("Trailer / Container type")
+
+    trailer_type = st.selectbox(
+        "Kies trailer",
+        ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
+    )
+
+    if trailer_type == "Standaard trailer (13.6m)":
+        st.session_state.trailer_length = 1360
+        st.session_state.trailer_width  = 245
+        st.session_state.trailer_height = 270
+
+    elif trailer_type == "40ft container":
+        st.session_state.trailer_length = 1203
+        st.session_state.trailer_width  = 235
+        st.session_state.trailer_height = 239
+
+    elif trailer_type == "20ft container":
+        st.session_state.trailer_length = 590
+        st.session_state.trailer_width  = 235
+        st.session_state.trailer_height = 239
+
+    else:  # Custom
+        st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
+        st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
+        st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
+
 
 with tab_calc:
     # Voer berekening uit (houdt rekening met toggles uit de sidebar)
@@ -419,6 +445,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
