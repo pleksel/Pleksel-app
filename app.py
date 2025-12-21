@@ -183,6 +183,31 @@ if uploaded_file:
 # =========================================================
 
 def calculate_metrics():
+    units_to_load = []
+
+    if mix_boxes:
+        # 🔀 Alles door elkaar
+        for _, row in df.iterrows():
+            for i in range(int(row['Aantal'])):
+                units_to_load.append({
+                    'order': row['OrderNr'],
+                    'id': f"{row['OrderNr']}_{row['ItemNr']}_{i}",
+                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                    'weight': float(row['Kg']),
+                    'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                })
+    else:
+        # 📦 Per order gescheiden laden
+        for order_nr, group in df.groupby('OrderNr'):
+            for _, row in group.iterrows():
+                for i in range(int(row['Aantal'])):
+                    units_to_load.append({
+                        'order': order_nr,
+                        'id': f"{order_nr}_{row['ItemNr']}_{i}",
+                        'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                        'weight': float(row['Kg']),
+                        'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                    })
 
     # --- Orders (gefilterd of alles) ---
     orders = st.session_state.get(
@@ -213,29 +238,6 @@ def calculate_metrics():
     # --------------------------------------------------
     units_to_load = []
 
-if mix_boxes:
-    # 🔀 Alles door elkaar
-    for _, row in df.iterrows():
-        for i in range(int(row['Aantal'])):
-            units_to_load.append({
-                'order': row['OrderNr'],
-                'id': f"{row['OrderNr']}_{row['ItemNr']}_{i}",
-                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                'weight': float(row['Kg']),
-                'stackable': str(row.get('Stack', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-            })
-else:
-    # 📦 Per order gescheiden laden
-    for order_nr, group in df.groupby('OrderNr'):
-        for _, row in group.iterrows():
-            for i in range(int(row['Aantal'])):
-                units_to_load.append({
-                    'order': order_nr,
-                    'id': f"{order_nr}_{row['ItemNr']}_{i}",
-                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                    'weight': float(row['Kg']),
-                    'stackable': str(row.get('Stack', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-                })
 
 
     # --------------------------------------------------
@@ -568,6 +570,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
