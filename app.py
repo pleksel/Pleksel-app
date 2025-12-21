@@ -129,57 +129,71 @@ if uploaded_file:
     except Exception as e:
         st.sidebar.error(f"Fout bij laden. Controleer of alle tabbladen (Item Data, Box Data, etc.) bestaan.")
 # =========================================================
-# 4. REKEN ENGINE (EERST DEFINIËREN)
+# 4. REKEN ENGINE (VERPAKKINGS-HIERARCHIE)
 # =========================================================
-def calculate_real_metrics():
-    # Check of de benodigde dataframes bestaan in session_state
-    if 'df_orders' not in st.session_state or 'df_items' not in st.session_state:
-        return 0, 0, 0, 0, 0, []
-        
-    if st.session_state.df_orders.empty or st.session_state.df_items.empty:
-        return 0, 0, 0, 0, 0, []
-    
-    # Data voorbereiden
-    orders = st.session_state.df_orders.copy()
-    items = st.session_state.df_items.copy()
-    
-    # Forceer ItemNr naar string voor een zuivere match
-    orders['ItemNr'] = orders['ItemNr'].astype(str)
-    items['ItemNr'] = items['ItemNr'].astype(str)
-    
-    # Koppelen
-    merged = pd.merge(orders, items, on="ItemNr", how="inner")
-    
-    if merged.empty:
+def calculate_metrics():
+    # 1. Haal data op uit de editor/state
+    # We proberen de data uit de session_state te halen als die er is, anders uit de editor keys
+    items = st.session_state.get('item_editor', pd.DataFrame())
+    orders = st.session_state.get('order_editor', pd.DataFrame())
+    boxes = st.session_state.get('box_editor', pd.DataFrame())
+    pallets_cfg = st.session_state.get('pallet_editor', pd.DataFrame())
+
+    if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    pallets_to_draw = []
+    # 2. Merge Order met Item data
+    # Zorg dat we kolommen hebben: ItemNr, L, B, H, Kg, Aantal
+    df = pd.merge(orders, items, on="ItemNr", how="left").fillna(0)
+    
+    total_weight = 0
+    total_volume = 0
+    calculated_pallets = []
+    
+    # Simpele aanname voor berekening (Box-fit & Pallet-fit)
+    # In een echte scenario zou je hier een Bin Packing algoritme gebruiken.
+    # Hier berekenen we het op basis van volume-capaciteit.
+    
+    for _, row in df.iterrows():
+        qty = int(row['Aantal'])
+        item_vol = row['L'] * row['B'] * row['H']
+        total_weight += qty * row['Kg']
+        total_volume += (qty * item_vol) / 1000000
+
+    # 3. Bereken aantal pallets (Voorbeeld-logica: 1.5m3 per pallet of max hoogte)
+    # We gebruiken de eerste pallet uit de lijst als standaard
+    if not pallets_cfg.empty:
+        p_l = pallets_cfg.iloc[0]['L']
+        p_b = pallets_cfg.iloc[0]['B']
+        p_max_h = pallets_cfg.iloc[0]['MaxH']
+        p_vol_cap = (p_l * p_b * p_max_h) * 0.85 # 85% efficiëntie
+    else:
+        p_l, p_b, p_max_h, p_vol_cap = 120, 80, 200, 1800000
+    
+    # Bereken benodigde pallets op basis van totaal volume vs pallet capaciteit
+    total_item_vol_cm3 = total_volume * 1000000
+    num_pallets = int(np.ceil(total_item_vol_cm3 / p_vol_cap)) if total_item_vol_cm3 > 0 else 0
+    
+    # 4. Genereer pallet posities voor 3D viewer
     current_x = 0
-    
-    for _, row in merged.iterrows():
-        try:
-            aantal = int(row['Aantal'])
-            l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
-            kg = float(row['Kg'])
+    for i in range(num_pallets):
+        # We plaatsen pallets 2-dik (naast elkaar op de Y-as)
+        y_pos = 0 if i % 2 == 0 else 85
+        if i > 0 and i % 2 == 0:
+            current_x += p_l + 5
             
-            for i in range(aantal):
-                pallets_to_draw.append({
-                    'id': f"{row['ItemNr']}_{i}",
-                    'dim': [l, b, h],
-                    'pos': [current_x, 0, 0],
-                    'weight': kg
-                })
-                current_x += l + 5
-        except:
-            continue
+        calculated_pallets.append({
+            'id': f'Pallet_{i+1}',
+            'weight': total_weight / num_pallets if num_pallets > 0 else 0,
+            'dim': [p_l, p_b, p_max_h * 0.7], # We vullen ze voor 70% voor het zicht
+            'pos': [current_x, y_pos, 0]
+        })
+
+    # 5. Finale statistieken
+    lm = round((current_x + p_l) / 100, 2) if num_pallets > 0 else 0
+    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
     
-    tw = sum(p['weight'] for p in pallets_to_draw)
-    tv = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in pallets_to_draw)
-    tp = len(pallets_to_draw)
-    tlm = round(current_x / 100, 2)
-    tt = int(np.ceil(tlm / 13.6)) if tlm > 0 else 0
-    
-    return tw, round(tv, 2), tp, tt, tlm, pallets_to_draw
+    return round(total_weight, 1), round(total_volume, 2), num_pallets, trucks, lm, calculated_pallets
 
 # =========================================================
 # 5. UI TABS (DAARNÁ AANROEPEN)
@@ -225,6 +239,7 @@ with tab_calc:
 
     fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
