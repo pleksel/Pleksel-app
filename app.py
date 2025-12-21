@@ -157,163 +157,102 @@ if uploaded_file:
     st.sidebar.success("Bestand succesvol geladen!")
 
 # =========================================================
-
-# 4. REKEN ENGINE (SIMULATIE)
-
+# 4. REKEN ENGINE (GEKOPPELD AAN DATA & VIEWER)
 # =========================================================
+def calculate_real_metrics():
+    # Controleer of er data is, anders return leegte
+    if st.session_state.df_orders.empty or st.session_state.df_items.empty:
+        return 0, 0, 0, 0, 0, []
+    
+    # Koppel Order aan Item Data op basis van ItemNr
+    merged = pd.merge(st.session_state.df_orders, st.session_state.df_items, on="ItemNr", how="left")
+    
+    pallets_to_draw = []
+    current_x = 0
+    
+    # Maak voor elk item in de order een 3D-blokje aan
+    for idx, row in merged.iterrows():
+        # Controleer of de benodigde kolommen bestaan
+        try:
+            aantal = int(row['Aantal'])
+            l = float(row['L_cm'])
+            b = float(row['B_cm'])
+            h = float(row['H_cm'])
+            kg = float(row['Kg'])
+        except:
+            continue
 
-def calculate_metrics(pallets):
-
-    total_w = sum(p['weight'] for p in pallets)
-
-    total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in pallets)
-
-    num_pal = len(pallets)
-
-    # Bereken laadmeter op basis van unieke X-posities (max lengte van de trailer benutting)
-
-    max_x = max([p['pos'][0] + p['dim'][0] for p in pallets]) if pallets else 0
-
-    lm = round(max_x / 100, 2)
-
+        for i in range(aantal):
+            pallets_to_draw.append({
+                'id': f"{row['ItemNr']}_{idx}_{i}",
+                'dim': [l, b, h],
+                'pos': [current_x, 0, 0], # Simpele plaatsing achter elkaar
+                'weight': kg
+            })
+            current_x += l + 2  # 2cm tussenruimte
+    
+    total_w = sum(p['weight'] for p in pallets_to_draw)
+    total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in pallets_to_draw)
+    num_pal = len(pallets_to_draw)
+    lm = round(current_x / 100, 2)
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
-
-    return total_w, round(total_v, 2), num_pal, trucks, lm
-
+    
+    return total_w, round(total_v, 2), num_pal, trucks, lm, pallets_to_draw
 
 
 # =========================================================
-
 # 5. UI TABS
-
 # =========================================================
-
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
-
-
 with tab_data:
-
-    st.markdown(f"<div class='table-header'>{L['master']}</div>", unsafe_allow_html=True)
-
-    st.data_editor(pd.DataFrame(columns=["ItemNr", "L", "B", "H", "Kg", "Stapelbaar"]), num_rows="dynamic", use_container_width=True)
-
-    
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.markdown(f"<div class='table-header'>{L['order']}</div>", unsafe_allow_html=True)
-
-        st.data_editor(pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]), num_rows="dynamic", use_container_width=True)
-
-    with col2:
-
-        st.markdown(f"<div class='table-header'>{L['boxes']}</div>", unsafe_allow_html=True)
-
-        st.data_editor(pd.DataFrame(columns=["Naam", "L", "B", "H", "LeegKg"]), num_rows="dynamic", use_container_width=True)
-
-
-
-    st.markdown(f"<div class='table-header'>{L['pallets']}</div>", unsafe_allow_html=True)
-
-    st.data_editor(pd.DataFrame(columns=["Naam", "L", "B", "EigenKg", "MaxH"]), num_rows="dynamic", use_container_width=True)
-
-    
-
-    st.markdown(f"<div class='table-header'>{L['truck']}</div>", unsafe_allow_html=True)
-
-    st.data_editor(pd.DataFrame(columns=["Naam", "L", "B", "H", "MaxKg"]), num_rows="dynamic", use_container_width=True)
-
-
+    t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
+    with t1: st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
+    with t2: st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic", key="ed_boxes")
+    with t3: st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
+    with t4: st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
 
 with tab_calc:
+    # Haal de data op uit de reken engine
+    tw, tv, tp, tt, tlm, active_pallets = calculate_real_metrics()
 
-    # Mock data voor simulatie (X, Y, Z)
-
-    # Let op: Y-as gaat tot 245cm voor 'naast elkaar' laden
-
-    mock_pallets = [
-
-        {'id': 'P1', 'weight': 400, 'dim': [120, 80, 110], 'pos': [0, 0, 0]},
-
-        {'id': 'P2', 'weight': 400, 'dim': [120, 80, 110], 'pos': [0, 85, 0]},
-
-        {'id': 'P3', 'weight': 400, 'dim': [120, 80, 110], 'pos': [0, 170, 0]},
-
-        {'id': 'P4', 'weight': 200, 'dim': [120, 80, 100], 'pos': [0, 0, 115]}, # Gestapeld op P1
-
-    ]
-
-    
-
-    tw, tv, tp, tt, tlm = calculate_metrics(mock_pallets)
-
-
-
-    # Statistieken Dashboard boven de 3D beeld
-
+    # Statistieken Dashboard
     c1, c2, c3, c4, c5 = st.columns(5)
-
     metrics = [
-
         (L['stats_weight'], f"{tw} kg"),
-
         (L['stats_vol'], f"{tv} m³"),
-
         (L['stats_pal'], tp),
-
         (L['stats_trucks'], tt),
-
         (L['stats_lm'], f"{tlm} m")
-
     ]
-
     for i, (label, val) in enumerate(metrics):
-
         with [c1, c2, c3, c4, c5][i]:
-
             st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
-
-
 
     st.divider()
 
-
-
     # 3D Viewer
-
     fig = go.Figure()
-
-    # Trailer Vloer (13.6m x 2.45m)
-
-    fig.add_trace(go.Mesh3d(x=[0, 1360, 1360, 0, 0, 1360, 1360, 0], y=[0, 0, 245, 245, 0, 0, 245, 245], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.4))
-
     
-
-    for p in mock_pallets:
-
+    # Teken Trailer Vloer (Grijs vlak)
+    fig.add_trace(go.Mesh3d(x=[0, 1360, 1360, 0, 0, 1360, 1360, 0], y=[0, 0, 245, 245, 0, 0, 245, 245], z=[0, 0, 0, 0, 1, 1, 1, 1], color='gray', opacity=0.4))
+    
+    # Teken elk item uit de Excel-order
+    for p in active_pallets:
         px, py, pz = p['pos']
-
         pl, pb, ph = p['dim']
-
         fig.add_trace(go.Mesh3d(
-
             x=[px, px+pl, px+pl, px, px, px+pl, px+pl, px],
-
             y=[py, py, py+pb, py+pb, py, py, py+pb, py+pb],
-
             z=[pz, pz, pz, pz, pz+ph, pz+ph, pz+ph, pz+ph],
-
+            # Mesh indices voor een dichte box
             i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
-
             color='#38bdf8', opacity=0.7, name=p['id']
-
         ))
 
-
-
-    fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
-
+    fig.update_layout(
+        scene=dict(aspectmode='data', xaxis_title='Lengte (cm)', yaxis_title='Breedte (cm)', zaxis_title='Hoogte (cm)'),
+        paper_bgcolor="black", 
+        margin=dict(l=0,r=0,b=0,t=0)
+    )
     st.plotly_chart(fig, use_container_width=True)
