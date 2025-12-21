@@ -484,9 +484,9 @@ with tab_calc:
             ),
             paper_bgcolor="rgba(0,0,0,0)",
             margin=dict(l=0, r=0, b=0, t=0),
-            showlegend=False
+            showlegend=False)
 
-        )
+        
         fig.update_layout(
             scene=dict(
                 xaxis=dict(title='Lengte (cm)', range=[0, trailer_len], backgroundcolor="#0f172a"),
@@ -553,6 +553,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
