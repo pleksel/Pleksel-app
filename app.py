@@ -298,15 +298,7 @@ def calculate_metrics():
 
     
 
-    # === Trailer instellingen ophalen (STAP 2) ===
-    TRAILER_L = st.session_state.get("trailer_length", 1360)
-
-    used_length = min(curr_x + row_depth, TRAILER_L)
-    lm = round(used_length / 100, 2)
-
-    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
-
-    return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
+   
 
 
 
@@ -319,7 +311,20 @@ def calculate_metrics():
 
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
-with tab_data:
+
+    with tab_data:
+    t1, t2, t3, t4, t5 = st.tabs([
+        "Items", "Boxes", "Pallets", "Orders", "Trailers"
+    ]) 
+    with tab_data: 
+    with t1:
+        ...
+    with t4:
+        ...
+    with t5:
+        st.subheader("Trailer / Container type")
+        ...
+
     t1, t2, t3, t4, t5 = st.tabs([
     "Items",
     "Boxes",
@@ -363,14 +368,14 @@ with t5:
         st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
         st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
         st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
-
-
-with tab_calc:
-    # Voer berekening uit (houdt rekening met toggles uit de sidebar)
-    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
-with tab_calc:
+    with tab_calc:
 
     st.subheader("Order selectie")
+
+   with tab_calc:
+    # Voer berekening uit (houdt rekening met toggles uit de sidebar)
+    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
+
 
     orders_df = st.session_state.df_orders
 
@@ -570,6 +575,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
