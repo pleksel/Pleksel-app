@@ -83,36 +83,51 @@ L = T[st.session_state.lang]
 
 
 # =========================================================
-# 3. SIDEBAR & UPLOAD LOGICA (VERBETERD)
+# 3. SIDEBAR (Instellingen & Uitgebreide Template Upload)
 # =========================================================
 st.sidebar.title(L['settings'])
-st.session_state.lang = st.sidebar.selectbox("Language", ["NL"])
+st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
+
+# De oude vertrouwde toggles
+mix_boxes = st.sidebar.toggle(L['mix'], value=False)
+opt_stack = st.sidebar.toggle(L['stack'], value=True)
+opt_orient = st.sidebar.toggle(L['orient'], value=True)
 
 st.sidebar.divider()
 
-# Template genereren
-buffer_dl = io.BytesIO()
-with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
+# Verbeterde Template Download (met de 4 benodigde tabbladen)
+buffer = io.BytesIO()
+with pd.ExcelWriter(buffer, engine='xlsxwriter') as writer:
     pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
     pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
     pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
     pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
 
-st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "template.xlsx")
+st.sidebar.download_button(
+    label=L['download'],
+    data=buffer.getvalue(),
+    file_name="pleksel_template.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
-# Upload en Verwerk
+# Uitgebreide Template Upload
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
+
 if uploaded_file:
     try:
+        # Open het Excel bestand
         xls = pd.ExcelFile(uploaded_file)
-        # We overschrijven de session_state direct
+        
+        # Lees de specifieke tabbladen in en zet ze in de session_state
+        # .fillna(0) zorgt dat lege cellen geen errors veroorzaken
         st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
         st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
         st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
-        st.sidebar.success("Data geladen! Ga naar PLANNING.")
+        
+        st.sidebar.success("Bestand succesvol geladen! Data is verdeeld over de tabs.")
     except Exception as e:
-        st.sidebar.error(f"Check tabblad namen: {e}")
+        st.sidebar.error(f"Fout bij laden. Controleer of alle tabbladen (Item Data, Box Data, etc.) bestaan.")
 # =========================================================
 # 4. REKEN ENGINE (EERST DEFINIËREN)
 # =========================================================
@@ -210,6 +225,7 @@ with tab_calc:
 
     fig.update_layout(scene=dict(aspectmode='data'), paper_bgcolor="black", margin=dict(l=0,r=0,b=0,t=0))
     st.plotly_chart(fig, use_container_width=True)
+
 
 
 
