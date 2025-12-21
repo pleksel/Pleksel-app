@@ -222,7 +222,7 @@ def calculate_metrics():
                 'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
             })
 
-    positioned_units = []
+       positioned_units = []
 
     curr_x = 0
     curr_y = 0
@@ -242,11 +242,16 @@ def calculate_metrics():
             curr_y = 0
             row_depth = 0
 
-           total_w = sum(p['weight'] for p in positioned_units)
-total_v = sum(
-    (p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000
-    for p in positioned_units
-)
+        # (plaatsing volgt later)
+
+    # ✅ LET OP: zelfde inspringing als 'for'
+    total_w = sum(p['weight'] for p in positioned_units)
+
+    total_v = sum(
+        (p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000
+        for p in positioned_units
+    )
+
 
     # === Trailer instellingen ophalen (STAP 2) ===
     TRAILER_L = st.session_state.get("trailer_length", 1360)
@@ -488,6 +493,7 @@ with tab_calc:
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
