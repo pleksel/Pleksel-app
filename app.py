@@ -4,7 +4,7 @@ import math, io, os
 from fpdf import FPDF
 
 # =========================================================
-# 1. THEME & GEAVANCEERDE CSS (FORCEER DONKERE KLEUREN)
+# 1. THEME & FORCEER DONKERE INVOERVELDEN (GEEN WIT)
 # =========================================================
 st.set_page_config(page_title="Logistiek Planning Systeem", layout="wide")
 
@@ -22,20 +22,33 @@ def apply_pro_industrial_theme():
             color: #38bdf8 !important; font-weight: 600;
         }
 
-        /* DATA EDITOR FIX (Vakken altijd donker maken) */
-        /* Dit forceert de vakjes uit de foto naar donkerblauw/grijs */
+        /* --- FORCEER DONKERE INVOERVELDEN (DE OPLOSSING) --- */
+        
+        /* 1. Algemene tabel achtergrond */
         div[data-testid="stDataEditor"] {
             background-color: #161d27 !important;
             border: 1px solid #334155 !important;
         }
 
-        /* Overschrijf witte cel-achtergronden van de Glide Data Grid */
-        /* De 'canvas' laag van de tabel moet ook donker */
-        div[data-testid="stDataEditor"] > div:first-child {
+        /* 2. Forceer de 'canvas' en alle interne containers van de editor naar donker */
+        div[data-testid="stDataEditor"] > div {
             background-color: #161d27 !important;
         }
 
-        /* Download knop fix (Wit op wit voorkomen) */
+        /* 3. Specifieke styling voor de handmatige invoer-cellen (Glide Data Grid) */
+        /* Dit zorgt dat de cellen NIET wit uitslaan als ze passief zijn */
+        [data-testid="stDataEditor"] canvas {
+            filter: invert(0.9) hue-rotate(180deg) brightness(0.8); /* Techniek om canvas kleuren om te draaien naar donker */
+        }
+
+        /* 4. Andere Streamlit invoervelden (mochten die gebruikt worden) */
+        input, select, textarea {
+            background-color: #161d27 !important;
+            color: #ffffff !important;
+            border: 1px solid #334155 !important;
+        }
+
+        /* Download knop fix */
         div.stDownloadButton > button {
             background-color: #1e293b !important;
             color: #ffffff !important;
@@ -58,20 +71,13 @@ def apply_pro_industrial_theme():
             background-color: #38bdf8 !important; color: #000000 !important; font-weight: bold; 
         }
 
-        /* Headers */
-        h1, h2, h3 { color: #ffffff; font-weight: 700; }
+        /* Titels */
         .table-title { color: #38bdf8; font-weight: 700; font-size: 1.1rem; margin-top: 25px; margin-bottom: 10px; }
         
-        /* Start Berekening Knop */
-        div[data-testid="stVerticalBlock"] > div:has(button) > div.stButton > button {
+        /* Actie knop */
+        div.stButton > button {
             background: #38bdf8 !important; color: #000000 !important; border: none !important;
             font-weight: 700; height: 3.5em;
-        }
-
-        /* File Uploader styling */
-        div[data-testid="stFileUploadDropzone"] {
-            background-color: #161d27 !important; border: 1px dashed #38bdf8 !important;
-            color: #ffffff !important;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -102,11 +108,10 @@ T = LANGS[lang_choice]
 # Kolomdefinities
 MASTER_COLS = {"ItemNr": str, "Lengte": float, "Breedte": float, "Hoogte": float, "Gewicht": float}
 BOXES_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "Hoogte": float, "Gewicht": float}
-PALLETS_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "MaxHoogte": float, "Gewicht": float, "PalletHoogte": float, "PalletStapelbaar": bool}
 TRUCK_COLS = {"Naam": str, "Lengte": float, "Breedte": float, "Hoogte": float, "MaxGewicht": float}
 
 # Init Session State
-for key, cols in [("master_data_df", MASTER_COLS), ("boxes_df", BOXES_COLS), ("pallets_df", PALLETS_COLS), ("custom_trucks_df", TRUCK_COLS)]:
+for key, cols in [("master_data_df", MASTER_COLS), ("boxes_df", BOXES_COLS), ("custom_trucks_df", TRUCK_COLS)]:
     if key not in st.session_state: 
         st.session_state[key] = pd.DataFrame(columns=cols.keys())
 
@@ -118,18 +123,15 @@ st.title("Logistiek Planning Systeem")
 tab_data, tab_results = st.tabs([f" {T['tab_input']} ", f" {T['tab_output']} "])
 
 with tab_data:
-    # Bovenste rij: Template & Import
     c1, c2 = st.columns([1, 2])
     with c1:
         st.download_button("Download Lege Template", io.BytesIO(b"Data").getvalue(), "template.xlsx")
     with c2:
         up = st.file_uploader("EXCEL IMPORT (.XLSX)", type="xlsx")
 
-    # Hoofdtabel: Artikelen
     st.markdown(f"<div class='table-title'>{T['header_master']}</div>", unsafe_allow_html=True)
     st.session_state.master_data_df = st.data_editor(st.session_state.master_data_df, num_rows="dynamic", key="m_ed", use_container_width=True)
 
-    # Grid voor Dozen en Vloot
     col_l, col_r = st.columns(2)
     with col_l:
         st.markdown(f"<div class='table-title'>{T['header_boxes']}</div>", unsafe_allow_html=True)
