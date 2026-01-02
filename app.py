@@ -2,7 +2,6 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from fpdf import FPDF
-import io
 import streamlit as st
 
 # =========================================================
@@ -29,6 +28,7 @@ apply_ui_theme()
 if 'lang' not in st.session_state:
     st.session_state.lang = 'NL'
 
+# Dataframes
 for key, cols in {
     'df_items': ["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"],
     'df_boxes': ["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"],
