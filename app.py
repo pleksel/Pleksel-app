@@ -41,11 +41,11 @@ for df_key, cols in [
 
 T = {
     'NL': {
-        'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen", 
+        'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen",
         'orient': "Lang/Breed laden", 'data_tab': "01: DATA INVOER", 'calc_tab': "02: PLANNING",
         'item_data': "Item Data", 'box_data': "Box Data", 'pallet_data': "Pallet Data",
-        'order_data': "Order Data", 'truck': "Truck/Container", 'download': "Download Template", 
-        'upload': "Upload Template", 'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 
+        'order_data': "Order Data", 'truck': "Truck/Container", 'download': "Download Template",
+        'upload': "Upload Template", 'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume",
         'stats_pal': "Aantal Pallets", 'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
     }
 }
@@ -147,7 +147,14 @@ def calculate_metrics():
             curr_x += row_depth + SPACING
             curr_y = 0
             row_depth = 0
-        positioned_units.append({'id': u['id'], 'dim': u['dim'], 'weight': u['weight'], 'stackable': u['stackable'], 'pos': [curr_x, curr_y], 'pz': 0})
+        positioned_units.append({
+            'id': u['id'],
+            'dim': u['dim'],
+            'weight': u['weight'],
+            'stackable': u['stackable'],
+            'pos': [curr_x, curr_y],
+            'pz': 0
+        })
         curr_y += b
         row_depth = max(row_depth, l)
 
@@ -165,121 +172,63 @@ def calculate_metrics():
 # =========================================================
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
+# --- TAB DATA ---
 with tab_data:
     t1, t2, t3, t4, t5 = st.tabs(["Items","Boxes","Pallets","Orders","Trailers"])
+
     with t1:
-        st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic")
+        st.session_state.df_items = st.data_editor(
+            st.session_state.df_items, use_container_width=True, num_rows="dynamic"
+        )
     with t2:
-        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic")
+        st.session_state.df_boxes = st.data_editor(
+            st.session_state.df_boxes, use_container_width=True, num_rows="dynamic"
+        )
     with t3:
-        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic")
+        st.session_state.df_pallets = st.data_editor(
+            st.session_state.df_pallets, use_container_width=True, num_rows="dynamic"
+        )
     with t4:
-        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic")
+        st.session_state.df_orders = st.data_editor(
+            st.session_state.df_orders, use_container_width=True, num_rows="dynamic"
+        )
     with t5:
         st.subheader("Trailer / Container type")
-        trailer_type = st.selectbox("Kies trailer", ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"])
-        if trailer_type=="Standaard trailer (13.6m)":
-            st.session_state.trailer_length=1360; st.session_state.trailer_width=245; st.session_state.trailer_height=270
-        elif trailer_type=="40ft container":
-            st.session_state.trailer_length=1203; st.session_state.trailer_width=235; st.session_state.trailer_height=239
-        elif trailer_type=="20ft container":
-            st.session_state.trailer_length=590; st.session_state.trailer_width=235; st.session_state.trailer_height=239
-        else:
-            st.session_state.trailer_length=st.number_input("Lengte (cm)",500,2000,1360)
-            st.session_state.trailer_width=st.number_input("Breedte (cm)",200,300,245)
-            st.session_state.trailer_height=st.number_input("Hoogte (cm)",200,350,270)
+        trailer_type = st.selectbox(
+            "Kies trailer", ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
+        )
+        if trailer_type == "Standaard trailer (13.6m)":
+            st.session_state.trailer_length = 1360
+            st.session_state.trailer_width = 245
+            st.session_state.trailer_height = 270
+        elif trailer_type == "40ft container":
+            st.session_state.trailer_length = 1203
+            st.session_state.trailer_width = 235
+            st.session_state.trailer_height = 239
+        elif trailer_type == "20ft container":
+            st.session_state.trailer_length = 590
+            st.session_state.trailer_width = 235
+            st.session_state.trailer_height = 239
+        else:  # Custom
+            st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
+            st.session_state.trailer_width = st.number_input("Breedte (cm)", 200, 300, 245)
+            st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
 
+# --- TAB CALCULATION ---
 with tab_calc:
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
 
     c1,c2,c3,c4,c5=st.columns(5)
     metrics = [
-        (L['stats_weight'], f"{res_w} kg"), 
-        (L['stats_vol'], f"{res_v} m³"), 
-        (L['stats_pal'], res_p), 
-        (L['stats_trucks'], res_t), 
+        (L['stats_weight'], f"{res_w} kg"),
+        (L['stats_vol'], f"{res_v} m³"),
+        (L['stats_pal'], res_p),
+        (L['stats_trucks'], res_t),
         (L['stats_lm'], f"{res_lm} m")
     ]
-    for col,(label,val) in zip([c1,c2,c3,c4,c5], metrics):
-        col.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
-    st.divider()
-    st.subheader("3D Trailer Layout & Legenda")
-
-    if not active_units:
-        st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
-    else:
-        col_viz, col_leg = st.columns([4,1])
-        fig = go.Figure()
-        colors=['#0ea5e9','#f59e0b','#ef4444','#10b981','#8b5cf6','#ec4899','#f43f5e','#06b6d4']
-        item_color_map = {}
-
-        trailer_w = st.session_state.trailer_width
-        trailer_h = st.session_state.trailer_height
-        trailer_len = st.session_state.trailer_length
-
-        for p in active_units:
-            l,b,h=p['dim']
-            x,y,z_base=p['pos'][0],p['pos'][1],p['pz']
-            item_type = str(p['id']).split('_')[0]
-            if item_type not in item_color_map: item_color_map[item_type]=colors[len(item_color_map)%len(colors)]
-            base_color=item_color_map[item_type]
-
-            fig.add_trace(go.Mesh3d(
-                x=[x,x,x+l,x+l,x,x,x+l,x+l],
-                y=[y,y+b,y+b,y,y,y+b,y+b,y],
-                z=[z_base,z_base,z_base,z_base,z_base+h,z_base+h,z_base+h,z_base+h],
-                i=[7,0,0,0,4,4,6,6,4,0,3,2],
-                j=[3,4,1,2,5,6,5,2,0,1,6,3],
-                k=[0,7,2,3,6,7,1,1,5,5,7,6],
-                color=base_color, opacity=0.9, flatshading=True, name=f"Type: {item_type}",
-                hoverinfo="text", customdata=[[item_type,l,b,h,p['weight'],"Ja" if p.get('stackable',True) else "Nee"]],
-                hovertemplate="<b>Item: %{customdata[0]}</b><br>Afmetingen: %{customdata[1]}x%{customdata[2]}x%{customdata[3]} cm<br>Gewicht: %{customdata[4]} kg<br>Stapelbaar: %{customdata[5]}<extra></extra>"
-            ))
-
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0,trailer_len], backgroundcolor="#0f172a"),
-                yaxis=dict(title='Breedte (cm)', range=[0,trailer_w], backgroundcolor="#0f172a"),
-                zaxis=dict(title='Hoogte (cm)', range=[0,trailer_h], backgroundcolor="#0f172a"),
-                aspectmode='manual',
-                aspectratio=dict(x=trailer_len/trailer_w, y=1, z=trailer_h/trailer_w)
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0,r=0,b=0,t=0),
-            showlegend=False
+    for col, (label, val) in zip([c1,c2,c3,c4,c5], metrics):
+        col.markdown(
+            f"<div class='metric-card'><small>{label}</small><br>"
+            f"<span class='metric-val'>{val}</span></div>", unsafe_allow_html=True
         )
-
-        with col_viz: st.plotly_chart(fig, use_container_width=True)
-        with col_leg:
-            st.markdown("### Legenda")
-            for itype,icolor in item_color_map.items():
-                st.markdown(f"<div style='display:flex;align-items:center;margin-bottom:5px;'><div style='width:20px;height:20px;background-color:{icolor};border-radius:4px;margin-right:10px;'></div><span>Item: {itype}</span></div>", unsafe_allow_html=True)
-            st.info(f"**Status:**\n- Mix: {'AAN' if st.session_state.mix_boxes else 'UIT'}\n- Stapel: {'AAN' if st.session_state.opt_stack else 'UIT'}\n- Orient: {'AAN' if st.session_state.opt_orient else 'UIT'}")
-
-        # PDF Export
-        st.divider()
-        if st.button("Genereer PDF Rapport"):
-            try:
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 16)
-                pdf.cell(190,10,"PLEKSEL TRAILER LAADPLAN",ln=True,align='C')
-                pdf.ln(10)
-                pdf.set_font("Arial",'B',12)
-                pdf.cell(190,10,f"Totaal Gewicht: {res_w} kg | Laadmeters: {res_lm} m",ln=True)
-                pdf.ln(5)
-                pdf.set_font("Arial",'B',10)
-                pdf.cell(60,8,"Item ID",border=1)
-                pdf.cell(40,8,"Afmetingen",border=1)
-                pdf.cell(40,8,"Positie (X,Y)",border=1)
-                pdf.cell(40,8,"Hoogte (Z)",border=1,ln=True)
-                pdf.set_font("Arial",'',9)
-                for p in active_units:
-                    pdf.cell(60,7,str(p['id']),border=1)
-                    pdf.cell(40,7,f"{p['dim'][0]}x{p['dim'][1]}",border=1)
-                    pdf.cell(40,7,f"{round(p['pos'][0])},{round(p['pos'][1])}",border=1)
-                    pdf.cell(40,7,f"{round(p['pz'])}",border=1,ln=True)
-                pdf_bytes = pdf.output(dest='S').encode('latin-1')
-                st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
-            except Exception as e:
-                st.error(f"Fout bij PDF genereren: {e}")
+    st.divider()
