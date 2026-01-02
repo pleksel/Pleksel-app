@@ -343,122 +343,75 @@ with tab_calc:
     # Voer berekening uit
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
     # --- 3D INTERACTIEVE TRAILER ---
-    st.subheader("3D Trailer Layout & Legenda")
+        st.subheader("3D Trailer Layout & Legenda")
 
-    if not active_units:
-        st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
-    else:
-        # Layout met kolom voor legenda
-        col_viz, col_leg = st.columns([4, 1])
+        if not active_units:
+            st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
+        else:
+            col_viz, col_leg = st.columns([4, 1])
 
-        fig = go.Figure()
-        colors = ['#0ea5e9', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4']
-        item_color_map = {}
+            fig = go.Figure()
+            colors = ['#0ea5e9', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4']
+            item_color_map = {}
 
-        for p in active_units:
-            l, b, h = p['dim']
-            x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
-            
-            # Kleur bepalen op basis van ItemNr (prefix van ID)
-            item_type = str(p['id']).split('_')[0]
-            if item_type not in item_color_map:
-                item_color_map[item_type] = colors[len(item_color_map) % len(colors)]
-            
-            base_color = item_color_map[item_type]
+            for p in active_units:
+                l, b, h = p['dim']
+                x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
+                
+                item_type = str(p['id']).split('_')[0]
+                if item_type not in item_color_map:
+                    item_color_map[item_type] = colors[len(item_color_map) % len(colors)]
+                
+                base_color = item_color_map[item_type]
 
-            # 3D Mesh constructie (Shader look)
-            fig.add_trace(go.Mesh3d(
-                x=[x, x, x+l, x+l, x, x, x+l, x+l],
-                y=[y, y+b, y+b, y, y, y+b, y+b, y],
-                z=[z_base, z_base, z_base, z_base, z_base+h, z_base+h, z_base+h, z_base+h],
-                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=base_color,
-                opacity=0.9,
-                flatshading=True,
-                name=f"Type: {item_type}",
-                hoverinfo="text",
-                customdata=[[item_type, l, b, h, p['weight'], "Ja" if p.get('stackable', True) else "Nee"]],
-                hovertemplate=(
-                    "<b>Item: %{customdata[0]}</b><br>" +
-                    "Afmetingen: %{customdata[1]}x%{customdata[2]}x%{customdata[3]} cm<br>" +
-                    "Gewicht: %{customdata[4]} kg<br>" +
-                    "Stapelbaar: %{customdata[5]}<br>" +
-                    "<extra></extra>"
-                )
-            ))
+                fig.add_trace(go.Mesh3d(
+                    x=[x, x, x+l, x+l, x, x, x+l, x+l],
+                    y=[y, y+b, y+b, y, y, y+b, y+b, y],
+                    z=[z_base, z_base, z_base, z_base, z_base+h, z_base+h, z_base+h, z_base+h],
+                    i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
+                    j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
+                    k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
+                    color=base_color,
+                    opacity=0.9,
+                    flatshading=True,
+                    name=f"Type: {item_type}",
+                    hoverinfo="text",
+                    customdata=[[item_type, l, b, h, p['weight'], "Ja" if p.get('stackable', True) else "Nee"]],
+                    hovertemplate="<b>Item: %{customdata[0]}</b><br>Afm: %{customdata[1]}x%{customdata[2]}x%{customdata[3]} cm<br>Gewicht: %{customdata[4]} kg<br>Stapelbaar: %{customdata[5]}<extra></extra>"
+                ))
 
-       
-        # Trailer visualisatie instellingen
-        trailer_len = st.session_state.get("trailer_length", 1360)
-        trailer_w   = st.session_state.get("trailer_width", 245)
-        trailer_h   = st.session_state.get("trailer_height", 270)
+            # Trailer settings ophalen
+            t_l = st.session_state.get("trailer_length", 1360)
+            t_w = st.session_state.get("trailer_width", 245)
+            t_h = st.session_state.get("trailer_height", 270)
 
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(
-                    title="Lengte (cm)",
-                    range=[0, trailer_len],
-                    backgroundcolor="#0f172a"
+            fig.update_layout(
+                scene=dict(
+                    xaxis=dict(title="Lengte (cm)", range=[0, t_l], backgroundcolor="#0f172a"),
+                    yaxis=dict(title="Breedte (cm)", range=[0, t_w], backgroundcolor="#0f172a"),
+                    zaxis=dict(title="Hoogte (cm)", range=[0, t_h], backgroundcolor="#0f172a"),
+                    aspectmode="manual",
+                    aspectratio=dict(x=t_l/t_w, y=1, z=t_h/t_w)
                 ),
-                yaxis=dict(
-                    title="Breedte (cm)",
-                    range=[0, trailer_w],
-                    backgroundcolor="#0f172a"
-                ),
-                zaxis=dict(
-                    title="Hoogte (cm)",
-                    range=[0, trailer_h],
-                    backgroundcolor="#0f172a"
-                ),
-                aspectmode="manual",
-                aspectratio=dict(
-                    x=trailer_len / trailer_w,
-                    y=1,
-                    z=trailer_h / trailer_w
-                )
-            ),
-            paper_bgcolor="rgba(0,0,0,0)",
-            margin=dict(l=0, r=0, b=0, t=0),
-            showlegend=False)
+                paper_bgcolor="rgba(0,0,0,0)",
+                margin=dict(l=0, r=0, b=0, t=0),
+                showlegend=False
+            )
 
-        
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0, trailer_len], backgroundcolor="#0f172a"),
-                yaxis=dict(title='Breedte (cm)', range=[0, 245], backgroundcolor="#0f172a"),
-                zaxis=dict(title='Hoogte (cm)', range=[0, 270], backgroundcolor="#0f172a"),
-                aspectmode='manual',
-    aspectratio=dict(
-    x=trailer_len / trailer_w,
-    y=1,
-    z=trailer_h / trailer_w
+            with col_viz:
+                st.plotly_chart(fig, use_container_width=True)
 
-
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, b=0, t=0),
-            showlegend=False
-        )
-
-        with col_viz:
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col_leg:
-            st.markdown("### Legenda")
-            for itype, icolor in item_color_map.items():
-                st.markdown(f"""
-                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                        <div style="width: 20px; height: 20px; background-color: {icolor}; border-radius: 4px; margin-right: 10px;"></div>
-                        <span>Item: {itype}</span>
-                    </div>
-                """, unsafe_allow_html=True)
-            
-            st.info(f"**Status:**\n- Mix: {'AAN' if mix_boxes else 'UIT'}\n- Stapel: {'opt_stack = st.session_state.get("opt_stack", False)
-opt_orient = st.session_state.get("opt_orient", False)
-mix_boxes = st.session_state.get("mix_boxes", False)
-'}\n- Orient: {'AAN' if opt_orient else 'UIT'}")
+            with col_leg:
+                st.markdown("### Legenda")
+                for itype, icolor in item_color_map.items():
+                    st.markdown(f"""
+                        <div style="display: flex; align-items: center; margin-bottom: 5px;">
+                            <div style="width: 20px; height: 20px; background-color: {icolor}; border-radius: 4px; margin-right: 10px;"></div>
+                            <span>Item: {itype}</span>
+                        </div>
+                    """, unsafe_allow_html=True)
+                
+                st.info(f"**Status:**\n- Mix: {'JA' if mix_boxes else 'NEE'}\n- Stapel: {'JA' if st.session_state.get('opt_stack') else 'NEE'}\n- Orient: {'JA' if opt_orient else 'NEE'}")
 
         # --- PDF EXPORT ---
         st.divider()
@@ -470,26 +423,25 @@ mix_boxes = st.session_state.get("mix_boxes", False)
                 pdf.cell(190, 10, "PLEKSEL TRAILER LAADPLAN", ln=True, align='C')
                 pdf.ln(10)
                 
-                # Stats in PDF
                 pdf.set_font("Arial", 'B', 12)
                 pdf.cell(190, 10, f"Totaal Gewicht: {res_w} kg | Laadmeters: {res_lm} m", ln=True)
                 pdf.ln(5)
 
-                # Tabel met laadlijst
+                # Tabel headers
                 pdf.set_font("Arial", 'B', 10)
-                pdf.cell(60, 8, "Item ID", border=1)
-                pdf.cell(40, 8, "Afmetingen", border=1)
-                pdf.cell(40, 8, "Positie (X,Y)", border=1)
-                pdf.cell(40, 8, "Hoogte (Z)", border=1, ln=True)
+                pdf.cell(50, 8, "Item ID", 1); pdf.cell(40, 8, "Afmetingen", 1); pdf.cell(50, 8, "Positie (X,Y)", 1); pdf.cell(30, 8, "Hoogte (Z)", 1, ln=True)
 
                 pdf.set_font("Arial", '', 9)
                 for p in active_units:
-                    pdf.cell(60, 7, str(p['id']), border=1)
-                    pdf.cell(40, 7, f"{p['dim'][0]}x{p['dim'][1]}", border=1)
-                    pdf.cell(40, 7, f"{round(p['pos'][0])},{round(p['pos'][1])}", border=1)
-                    pdf.cell(40, 7, f"{round(p['pz'])}", border=1, ln=True)
+                    pdf.cell(50, 7, str(p['id']), 1)
+                    pdf.cell(40, 7, f"{p['dim'][0]}x{p['dim'][1]}", 1)
+                    pdf.cell(50, 7, f"{round(p['pos'][0])}, {round(p['pos'][1])}", 1)
+                    pdf.cell(30, 7, f"{round(p['pz'])}", 1, ln=True)
 
-                pdf_bytes = pdf.output(dest='S').encode('latin-1')
+                pdf_output = pdf.output(dest='S')
+                # Afhankelijk van de fpdf versie kan dit bytes of een string zijn
+                pdf_bytes = pdf_output if isinstance(pdf_output, bytes) else pdf_output.encode('latin-1')
+                
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
