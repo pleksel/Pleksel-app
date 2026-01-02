@@ -117,86 +117,67 @@ L = T[st.session_state.lang]
 
 
 # =========================================================
-
-# 3. SIDEBAR (Instellingen & Template Upload)
-
+# 3. SIDEBAR (Instellingen & Template Upload)  ✅ FIXED
 # =========================================================
 
 st.sidebar.title(L['settings'])
-
-st.session_state.lang = st.sidebar.selectbox("Language / Sprache / Taal", ["NL", "EN", "DE"])
-
-
-
-# Nieuwe Slider voor berekeningsmethode
-
-calc_mode = st.sidebar.select_slider(
-
-    "Berekeningsmethode",
-
-    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
-
-    value="Handmatig (Volle units)",
-
-    help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
-
+st.session_state.lang = st.sidebar.selectbox(
+    "Language / Sprache / Taal", ["NL", "EN", "DE"], key="lang_select"
 )
 
+# ---- Berekeningsmethode (SLIDER) ----
+st.session_state.calc_mode = st.sidebar.select_slider(
+    "Berekeningsmethode",
+    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
+    value=st.session_state.get("calc_mode", "Handmatig (Volle units)"),
+    help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
+)
 
+# ---- Toggles (MOETEN in session_state!) ----
+st.session_state.mix_boxes = st.sidebar.toggle(
+    L['mix'], value=st.session_state.get("mix_boxes", False)
+)
 
-mix_boxes = st.sidebar.toggle(L['mix'], value=False)
+st.session_state.opt_stack = st.sidebar.toggle(
+    L['stack'], value=st.session_state.get("opt_stack", True)
+)
 
-opt_stack = st.sidebar.toggle(L['stack'], value=True)
-
-opt_orient = st.sidebar.toggle(L['orient'], value=True)
-
-
+st.session_state.opt_orient = st.sidebar.toggle(
+    L['orient'], value=st.session_state.get("opt_orient", True)
+)
 
 st.sidebar.divider()
 
-
-
-# Template Download (4 tabbladen)
-
+# ---- Template Download ----
 buffer_dl = io.BytesIO()
-
 with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
-
-    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
-
-    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
-
-    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
-
-    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
-
-
+    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(
+        writer, sheet_name='Item Data', index=False
+    )
+    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(
+        writer, sheet_name='Box Data', index=False
+    )
+    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(
+        writer, sheet_name='Pallet Data', index=False
+    )
+    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(
+        writer, sheet_name='Order Data', index=False
+    )
 
 st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "pleksel_template.xlsx")
 
-
-
+# ---- Upload ----
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
-
 if uploaded_file:
-
     try:
-
         xls = pd.ExcelFile(uploaded_file)
-
         st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
-
         st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
-
         st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
-
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
-
         st.sidebar.success("Geladen!")
-
-    except:
-
-        st.sidebar.error("Fout in bestand.")
+    except Exception as e:
+        st.sidebar.error(f"Fout in bestand: {e}")
 
 # =========================================================
 
@@ -207,152 +188,74 @@ if uploaded_file:
 def calculate_metrics():
 
     orders = st.session_state.get('df_orders', pd.DataFrame())
-
     items = st.session_state.get('df_items', pd.DataFrame())
 
-    
-
-    # Haal instellingen uit session_state
-
     opt_stack = st.session_state.get('opt_stack', True)
-
     opt_orient = st.session_state.get('opt_orient', True)
 
-
-
     if orders.empty or items.empty:
-
         return 0, 0, 0, 0, 0, []
 
-    
-
-    # Normaliseer kolomnamen
-
-    items_cp = items.copy().rename(columns={'L': 'L_cm', 'B': 'B_cm', 'H': 'H_cm', 'Stapelbaar': 'Stack'})
-
+    items_cp = items.copy()
     orders_cp = orders.copy()
 
     orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
-
     items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
 
-    
+    df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
 
-    df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner").fillna(0)
-
-    if df.empty: return 0, 0, 0, 0, 0, []
-
-
+    if df.empty:
+        return 0, 0, 0, 0, 0, []
 
     units_to_load = []
 
     for _, row in df.iterrows():
-
         for i in range(int(row['Aantal'])):
-
             units_to_load.append({
-
                 'id': f"{row['ItemNr']}_{i}",
-
                 'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-
                 'weight': float(row['Kg']),
-
-                'stackable': str(row.get('Stack', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-
+                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
             })
-
-
 
     positioned_units = []
 
     curr_x = 0
+    curr_y = 0
+    row_depth = 0
 
-    i = 0
+    MAX_WIDTH = 245
+    SPACING = 2
 
-    max_h = 250 
-
-
-
-    while i < len(units_to_load):
-
-        u = units_to_load[i]
-
+    for u in units_to_load:
         l, b, h = u['dim']
 
-        
-
-        # Oriëntatie logica
-
         if opt_orient and l > b:
+            l, b = b, l
 
-            l, b = b, l 
+        if curr_y + b > MAX_WIDTH:
+            curr_x += row_depth + SPACING
+            curr_y = 0
+            row_depth = 0
 
+            total_w = sum(p['weight'] for p in positioned_units)
+    total_v = sum(
+        (p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000
+        for p in positioned_units
+    )
 
+    # === Trailer instellingen ophalen (STAP 2) ===
+    TRAILER_L = st.session_state.get("trailer_length", 1360)
 
-        # Stapel logica: Zoek of dit item op een bestaande positie past
-
-        stacked = False
-
-        if opt_stack and u['stackable']:
-
-            for p in positioned_units:
-
-                # Check of er ruimte bovenop een unit op de huidige x-as is
-
-                if p['pos'][0] == curr_x and p['pz'] == 0 and (p['dim'][2] + h <= max_h):
-
-                    positioned_units.append({
-
-                        'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, p['pos'][1], 0], 
-
-                        'pz': p['dim'][2], 'weight': u['weight']
-
-                    })
-
-                    stacked = True
-
-                    break
-
-        
-
-        if not stacked:
-
-            # Als we niet kunnen stapelen, check of we 2-breed kunnen laden
-
-            if opt_orient and b <= 120 and (i + 1) < len(units_to_load):
-
-                positioned_units.append({'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, 0, 0], 'pz': 0, 'weight': u['weight']})
-
-                i += 1
-
-                u2 = units_to_load[i]
-
-                positioned_units.append({'id': u2['id'], 'dim': [u2['dim'][1], u2['dim'][0], u2['dim'][2]], 'pos': [curr_x, 122, 0], 'pz': 0, 'weight': u2['weight']})
-
-                curr_x += 82
-
-            else:
-
-                positioned_units.append({'id': u['id'], 'dim': [l, b, h], 'pos': [curr_x, 0, 0], 'pz': 0, 'weight': u['weight']})
-
-                curr_x += l + 2
-
-        i += 1
-
-
-
-    total_w = sum(p['weight'] for p in positioned_units)
-
-    total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1000000 for p in positioned_units)
-
-    lm = round(curr_x / 100, 2)
+    used_length = min(curr_x + row_depth, TRAILER_L)
+    lm = round(used_length / 100, 2)
 
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
-    
-
     return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
+
+
+
 
 
 
@@ -363,7 +266,14 @@ def calculate_metrics():
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
-    t1, t2, t3, t4 = st.tabs(["Items", "Boxes", "Pallets", "Orders"])
+    t1, t2, t3, t4, t5 = st.tabs([
+    "Items",
+    "Boxes",
+    "Pallets",
+    "Orders",
+    "Trailers"
+])
+
     with t1:
         st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
     with t2:
@@ -372,6 +282,34 @@ with tab_data:
         st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
     with t4:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
+with t5:
+    st.subheader("Trailer / Container type")
+
+    trailer_type = st.selectbox(
+        "Kies trailer",
+        ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
+    )
+
+    if trailer_type == "Standaard trailer (13.6m)":
+        st.session_state.trailer_length = 1360
+        st.session_state.trailer_width  = 245
+        st.session_state.trailer_height = 270
+
+    elif trailer_type == "40ft container":
+        st.session_state.trailer_length = 1203
+        st.session_state.trailer_width  = 235
+        st.session_state.trailer_height = 239
+
+    elif trailer_type == "20ft container":
+        st.session_state.trailer_length = 590
+        st.session_state.trailer_width  = 235
+        st.session_state.trailer_height = 239
+
+    else:  # Custom
+        st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
+        st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
+        st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
+
 
 with tab_calc:
     # Voer berekening uit (houdt rekening met toggles uit de sidebar)
@@ -440,14 +378,20 @@ with tab_calc:
             ))
 
         # Trailer visualisatie instellingen
-        trailer_len = max(res_lm * 100, 1360)
+        trailer_len = 1360
+
         fig.update_layout(
             scene=dict(
                 xaxis=dict(title='Lengte (cm)', range=[0, trailer_len], backgroundcolor="#0f172a"),
                 yaxis=dict(title='Breedte (cm)', range=[0, 245], backgroundcolor="#0f172a"),
                 zaxis=dict(title='Hoogte (cm)', range=[0, 270], backgroundcolor="#0f172a"),
                 aspectmode='manual',
-                aspectratio=dict(x=3, y=1, z=1)
+              aspectratio=dict(
+    x=trailer_len / trailer_w,
+    y=1,
+    z=trailer_h / trailer_w
+)
+
             ),
             paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=0, r=0, b=0, t=0),
