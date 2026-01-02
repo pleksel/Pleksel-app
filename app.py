@@ -4,7 +4,9 @@ import plotly.graph_objects as go
 from fpdf import FPDF
 import io
 import streamlit as st
+# ... andere imports ...
 
+st.session_state.clear() # TIJDELIJK TOEVOEGEN
 # =========================================================
 # 1. UI & THEME
 # =========================================================
@@ -213,3 +215,4 @@ with tab_data:
             st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
             st.session_state.trailer_width = st.number_input("Breedte (cm)", 200, 300, 245)
             st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
+
