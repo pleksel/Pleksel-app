@@ -15,7 +15,6 @@ def apply_ui_theme():
     <style>
         .stApp { background-color: #020408; color: #e2e8f0; }
         section[data-testid="stSidebar"] { background-color: #000000 !important; border-right: 1px solid #38bdf8; }
-        .table-header { color: #38bdf8; font-weight: bold; border-bottom: 2px solid #38bdf8; padding: 5px 0; margin-top: 20px; margin-bottom: 10px; }
         div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; border-radius: 4px; }
         .metric-card { background: #111827; border: 1px solid #38bdf8; padding: 15px; border-radius: 8px; text-align: center; }
         .metric-val { color: #38bdf8; font-size: 24px; font-weight: bold; }
@@ -102,80 +101,81 @@ if uploaded_file:
         st.sidebar.error(f"Fout in bestand: {e}")
 
 # =========================================================
-# 4. REKEN ENGINE
+# 4. REKEN ENGINE MET 3D STACKING
 # =========================================================
 def calculate_metrics():
     orders = st.session_state.df_orders
     items = st.session_state.df_items
-    opt_stack = st.session_state.opt_stack
     opt_orient = st.session_state.opt_orient
 
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    items_cp = items.copy()
-    orders_cp = orders.copy()
-    orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
-    items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
+    df = pd.merge(
+        orders.astype({"ItemNr": str}),
+        items.astype({"ItemNr": str}),
+        on="ItemNr", how="inner"
+    )
 
-    df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
     if df.empty:
         return 0, 0, 0, 0, 0, []
 
-    units_to_load = []
+    units = []
     for _, row in df.iterrows():
         for i in range(int(row['Aantal'])):
-            units_to_load.append({
+            l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
+            if opt_orient and l > b:
+                l, b = b, l
+            units.append({
                 'id': f"{row['ItemNr']}_{i}",
-                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                'dim': [l, b, h],
                 'weight': float(row['Kg']),
-                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja','1','yes','true']
             })
 
+    # 3D stacking logic: pos x, y, z
     positioned_units = []
-    curr_x = 0
-    curr_y = 0
-    row_depth = 0
+    curr_x, curr_y, curr_z = 0, 0, 0
+    row_depth, row_height = 0, 0
     MAX_WIDTH = st.session_state.get("trailer_width", 245)
+    TRAILER_LEN = st.session_state.get("trailer_length", 1360)
     SPACING = 2
 
-    for u in units_to_load:
+    for u in units:
         l, b, h = u['dim']
-        if opt_orient and l > b:
-            l, b = b, l
         if curr_y + b > MAX_WIDTH:
             curr_x += row_depth + SPACING
             curr_y = 0
             row_depth = 0
+            row_height = 0
         positioned_units.append({
             'id': u['id'],
-            'dim': u['dim'],
+            'dim': [l, b, h],
             'weight': u['weight'],
             'stackable': u['stackable'],
             'pos': [curr_x, curr_y],
-            'pz': 0
+            'pz': curr_z
         })
         curr_y += b
         row_depth = max(row_depth, l)
+        row_height = max(row_height, h)
 
     total_w = sum(p['weight'] for p in positioned_units)
     total_v = sum((p['dim'][0]*p['dim'][1]*p['dim'][2])/1_000_000 for p in positioned_units)
-    TRAILER_L = st.session_state.get("trailer_length", 1360)
-    used_length = min(curr_x + row_depth, TRAILER_L)
-    lm = round(used_length/100,2)
-    trucks = int(np.ceil(lm/13.6)) if lm>0 else 0
+    used_length = min(curr_x + row_depth, TRAILER_LEN)
+    lm = round(used_length / 100, 2)
+    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
-    return round(total_w,1), round(total_v,2), len(units_to_load), trucks, lm, positioned_units
+    return round(total_w,1), round(total_v,2), len(units), trucks, lm, positioned_units
 
 # =========================================================
-# 5. UI TABS & 3D VISUALISATIE
+# 5. UI TABS
 # =========================================================
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 # --- TAB DATA ---
 with tab_data:
     t1, t2, t3, t4, t5 = st.tabs(["Items","Boxes","Pallets","Orders","Trailers"])
-
     with t1:
         st.session_state.df_items = st.data_editor(
             st.session_state.df_items, use_container_width=True, num_rows="dynamic"
@@ -213,22 +213,3 @@ with tab_data:
             st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
             st.session_state.trailer_width = st.number_input("Breedte (cm)", 200, 300, 245)
             st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
-
-# --- TAB CALCULATION ---
-with tab_calc:
-    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
-
-    c1,c2,c3,c4,c5=st.columns(5)
-    metrics = [
-        (L['stats_weight'], f"{res_w} kg"),
-        (L['stats_vol'], f"{res_v} m³"),
-        (L['stats_pal'], res_p),
-        (L['stats_trucks'], res_t),
-        (L['stats_lm'], f"{res_lm} m")
-    ]
-    for col, (label, val) in zip([c1,c2,c3,c4,c5], metrics):
-        col.markdown(
-            f"<div class='metric-card'><small>{label}</small><br>"
-            f"<span class='metric-val'>{val}</span></div>", unsafe_allow_html=True
-        )
-    st.divider()
