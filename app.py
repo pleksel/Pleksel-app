@@ -274,32 +274,57 @@ def calculate_metrics():
 # =========================================================
 # 5. UI TABS
 # =========================================================
+# =========================================================
+# 5. UI TABS & DATA INPUT
+# =========================================================
+
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs(["Items", "Boxes", "Pallets", "Orders", "Trailers"])
-    
+    # Maak de sub-tabs aan binnen tab_data
+    t1, t2, t3, t4, t5 = st.tabs([
+        "Items", "Boxes", "Pallets", "Orders", "Trailers"
+    ])
+
     with t1:
         st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
+    
     with t2:
         st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic", key="ed_boxes")
+    
     with t3:
         st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
+    
     with t4:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
+    
     with t5:
         st.subheader("Trailer / Container type")
-        trailer_type = st.selectbox("Kies trailer", ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"])
+        trailer_type = st.selectbox(
+            "Kies trailer",
+            ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
+        )
+
         if trailer_type == "Standaard trailer (13.6m)":
-            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 1360, 245, 270
+            st.session_state.trailer_length = 1360
+            st.session_state.trailer_width  = 245
+            st.session_state.trailer_height = 270
         elif trailer_type == "40ft container":
-            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 1203, 235, 239
+            st.session_state.trailer_length = 1203
+            st.session_state.trailer_width  = 235
+            st.session_state.trailer_height = 239
         elif trailer_type == "20ft container":
-            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 590, 235, 239
-        else:
+            st.session_state.trailer_length = 590
+            st.session_state.trailer_width  = 235
+            st.session_state.trailer_height = 239
+        else:  # Custom
             st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
-            st.session_state.trailer_width = st.number_input("Breedte (cm)", 200, 300, 245)
+            st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
             st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
+
+with tab_calc:
+    st.subheader("Order selectie")
+    # Hier komt de rest van je tab_calc logica...
 
 with tab_calc:
     # --- Order selectie filter logica ---
@@ -468,6 +493,7 @@ mix_boxes = st.session_state.get("mix_boxes", False)
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
