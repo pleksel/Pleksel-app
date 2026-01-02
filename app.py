@@ -15,8 +15,7 @@ def apply_ui_theme():
     <style>
         .stApp { background-color: #020408; color: #e2e8f0; }
         section[data-testid="stSidebar"] { background-color: #000000 !important; border-right: 1px solid #38bdf8; }
-        .table-header { color: #38bdf8; font-weight: bold; border-bottom: 2px solid #38bdf8; padding: 5px 0; margin-top: 20px; margin-bottom: 10px; }
-        div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; border-radius: 4px; }
+        div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; }
         .metric-card { background: #111827; border: 1px solid #38bdf8; padding: 15px; border-radius: 8px; text-align: center; }
         .metric-val { color: #38bdf8; font-size: 24px; font-weight: bold; }
     </style>
@@ -25,46 +24,28 @@ def apply_ui_theme():
 apply_ui_theme()
 
 # =========================================================
-# 2. INITIALISATIE
+# 2. SESSION STATE
 # =========================================================
-if 'lang' not in st.session_state: st.session_state.lang = 'NL'
-if 'df_items' not in st.session_state: st.session_state.df_items = pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"])
-if 'df_boxes' not in st.session_state: st.session_state.df_boxes = pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"])
-if 'df_pallets' not in st.session_state: st.session_state.df_pallets = pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"])
-if 'df_orders' not in st.session_state: st.session_state.df_orders = pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"])
+if 'lang' not in st.session_state:
+    st.session_state.lang = 'NL'
 
-# Default trailer waarden
-if 'trailer_length' not in st.session_state: st.session_state.trailer_length = 1360
-if 'trailer_width' not in st.session_state: st.session_state.trailer_width = 245
-if 'trailer_height' not in st.session_state: st.session_state.trailer_height = 270
-
-T = {
-    'NL': {
-        'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen", 
-        'orient': "Lang/Breed laden", 'data_tab': "01: DATA INVOER", 'calc_tab': "02: PLANNING",
-        'item_data': "Item Data", 'box_data': "Box Data", 'pallet_data': "Pallet Data",
-        'order_data': "Order Data", 'truck': "Truck/Container", 'download': "Download Template", 
-        'upload': "Upload Template", 'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 
-        'stats_pal': "Aantal Pallets", 'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
-    }
-}
-L = T.get(st.session_state.lang, T['NL'])
+for key, cols in {
+    'df_items': ["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"],
+    'df_boxes': ["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"],
+    'df_pallets': ["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"],
+    'df_orders': ["OrderNr", "ItemNr", "Aantal"]
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = pd.DataFrame(columns=cols)
 
 # =========================================================
 # 3. SIDEBAR
 # =========================================================
-st.sidebar.title(L['settings'])
-st.session_state.lang = st.sidebar.selectbox("Taal", ["NL", "EN", "DE"], index=0)
+st.sidebar.title("Trailer Instellingen")
 
-calc_mode = st.sidebar.select_slider(
-    "Berekeningsmethode",
-    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
-    value="Handmatig (Volle units)"
-)
-
-mix_boxes = st.sidebar.toggle(L['mix'], value=False)
-opt_stack = st.sidebar.toggle(L['stack'], value=True)
-opt_orient = st.sidebar.toggle(L['orient'], value=True)
+st.session_state.mix_boxes = st.sidebar.toggle("Mix Boxes", False)
+st.session_state.opt_stack = st.sidebar.toggle("Stapelen", True)
+st.session_state.opt_orient = st.sidebar.toggle("Draaien", True)
 
 # =========================================================
 # 4. REKEN ENGINE
@@ -76,106 +57,114 @@ def calculate_metrics():
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
-    df = pd.merge(orders.astype(str), items.astype(str), on="ItemNr", how="inner")
-    
-    units_to_load = []
-    for _, row in df.iterrows():
-        for i in range(int(float(row['Aantal']))):
-            units_to_load.append({
-                'id': f"{row['ItemNr']}_{i}",
-                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                'weight': float(row['Kg']),
-                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+    df = pd.merge(
+        orders.astype({'ItemNr': str}),
+        items.astype({'ItemNr': str}),
+        on="ItemNr"
+    )
+
+    units = []
+    for _, r in df.iterrows():
+        for i in range(int(r["Aantal"])):
+            units.append({
+                "id": f"{r['ItemNr']}_{i}",
+                "dim": [float(r["L_cm"]), float(r["B_cm"]), float(r["H_cm"])],
+                "weight": float(r["Kg"]),
+                "stackable": str(r["Stapelbaar"]).lower() in ["ja", "yes", "1", "true"]
             })
 
-    positioned_units = []
-    curr_x, curr_y, row_depth = 0, 0, 0
-    MAX_WIDTH = st.session_state.trailer_width
-    SPACING = 2
+    placed = []
+    x = y = z = 0
+    row_depth = 0
+    WIDTH = st.session_state.trailer_width
 
-    for u in units_to_load:
-        l, b, h = u['dim']
-        if opt_orient and l > b: l, b = b, l
+    for u in units:
+        l, b, h = u["dim"]
+        if st.session_state.opt_orient and l > b:
+            l, b = b, l
 
-        if curr_y + b > MAX_WIDTH:
-            curr_x += row_depth + SPACING
-            curr_y = 0
+        if y + b > WIDTH:
+            x += row_depth + 2
+            y = 0
             row_depth = 0
 
-        u['pos'] = [curr_x, curr_y]
-        u['pz'] = 0  # Simpele 2D grondvlak plaatsing voor nu
-        positioned_units.append(u)
-        
-        curr_y += b + SPACING
+        u["pos"] = (x, y)
+        u["pz"] = 0
+        placed.append(u)
+
+        y += b + 2
         row_depth = max(row_depth, l)
 
-    total_w = sum(p['weight'] for p in positioned_units)
-    total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
-    used_length = curr_x + row_depth
-    lm = round(used_length / 100, 2)
-    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
+    total_w = sum(p["weight"] for p in placed)
+    total_v = sum((p["dim"][0]*p["dim"][1]*p["dim"][2])/1e6 for p in placed)
+    lm = round((x + row_depth) / 100, 2)
+    trucks = int(np.ceil(lm / 13.6)) if lm else 0
 
-    return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
+    return round(total_w,1), round(total_v,2), len(placed), trucks, lm, placed
 
 # =========================================================
 # 5. UI TABS
 # =========================================================
-tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
+tab_data, tab_calc = st.tabs(["01: DATA", "02: PLANNING"])
 
 with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs(["Items", "Boxes", "Pallets", "Orders", "Trailers"])
-    with t1: st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic")
-    with t4: st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic")
+    t1, t2, t3, t4, t5 = st.tabs(["Items","Boxes","Pallets","Orders","Trailer"])
+
+    with t1:
+        st.session_state.df_items = st.data_editor(st.session_state.df_items, num_rows="dynamic")
+    with t2:
+        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, num_rows="dynamic")
+    with t3:
+        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, num_rows="dynamic")
+    with t4:
+        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, num_rows="dynamic")
     with t5:
-        trailer_type = st.selectbox("Kies trailer", ["Standaard trailer (13.6m)", "40ft container", "Custom"])
-        if trailer_type == "Standaard trailer (13.6m)":
-            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 1360, 245, 270
-        elif trailer_type == "40ft container":
-            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 1203, 235, 239
+        trailer = st.selectbox("Trailer", ["Standaard", "40ft", "20ft", "Custom"])
+        if trailer == "Standaard":
+            st.session_state.trailer_length = 1360
+            st.session_state.trailer_width = 245
+            st.session_state.trailer_height = 270
+        elif trailer == "40ft":
+            st.session_state.trailer_length = 1203
+            st.session_state.trailer_width = 235
+            st.session_state.trailer_height = 239
+        elif trailer == "20ft":
+            st.session_state.trailer_length = 590
+            st.session_state.trailer_width = 235
+            st.session_state.trailer_height = 239
+        else:
+            st.session_state.trailer_length = st.number_input("Lengte", 500, 2000, 1360)
+            st.session_state.trailer_width = st.number_input("Breedte", 200, 300, 245)
+            st.session_state.trailer_height = st.number_input("Hoogte", 200, 350, 270)
 
 with tab_calc:
-    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
+    w, v, p, t, lm, units = calculate_metrics()
 
-    cols = st.columns(5)
-    metrics = [(L['stats_weight'], f"{res_w} kg"), (L['stats_vol'], f"{res_v} m³"), (L['stats_pal'], res_p), (L['stats_trucks'], res_t), (L['stats_lm'], f"{res_lm} m")]
-    for i, (label, val) in enumerate(metrics):
-        cols[i].markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
+    c1, c2, c3, c4, c5 = st.columns(5)
+    for col, lbl, val in zip(
+        [c1,c2,c3,c4,c5],
+        ["Gewicht","Volume","Units","Trucks","Laadmeters"],
+        [f"{w} kg", f"{v} m³", p, t, f"{lm} m"]
+    ):
+        with col:
+            st.markdown(f"<div class='metric-card'><small>{lbl}</small><div class='metric-val'>{val}</div></div>", unsafe_allow_html=True)
 
-    if active_units:
+    if units:
         fig = go.Figure()
-        colors = ['#0ea5e9', '#f59e0b', '#ef4444', '#10b981']
-        
-        for p in active_units:
-            l, b, h = p['dim']
-            x, y, z = p['pos'][0], p['pos'][1], p['pz']
-            item_type = str(p['id']).split('_')[0]
-            
+        for u in units:
+            l,b,h = u["dim"]
+            x,y = u["pos"]
+            z = u["pz"]
             fig.add_trace(go.Mesh3d(
-                x=[x, x, x+l, x+l, x, x, x+l, x+l],
-                y=[y, y+b, y+b, y, y, y+b, y+b, y],
-                z=[z, z, z, z, z+h, z+h, z+h, z+h],
-                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=colors[0], opacity=0.8, flatshading=True, name=item_type
+                x=[x,x,x+l,x+l,x,x,x+l,x+l],
+                y=[y,y+b,y+b,y,y,y+b,y+b,y],
+                z=[z,z,z,z,z+h,z+h,z+h,z+h],
+                opacity=0.9
             ))
 
         fig.update_layout(scene=dict(
             xaxis=dict(range=[0, st.session_state.trailer_length]),
             yaxis=dict(range=[0, st.session_state.trailer_width]),
-            zaxis=dict(range=[0, st.session_state.trailer_height]),
-            aspectmode='data'
-        ), margin=dict(l=0, r=0, b=0, t=0))
+            zaxis=dict(range=[0, st.session_state.trailer_height])
+        ))
         st.plotly_chart(fig, use_container_width=True)
-        
-        if st.button("Genereer PDF"):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", 'B', 16)
-            pdf.cell(190, 10, "LAADPLAN", ln=True, align='C')
-            pdf.set_font("Arial", '', 10)
-            for p in active_units:
-                pdf.cell(190, 7, f"Item {p['id']}: Pos {p['pos']}", ln=True)
-            st.download_button("Download PDF", pdf.output(dest='S'), "plan.pdf", "application/pdf")
-    else:
-        st.info("Voer eerst data in bij Tab 01.")
