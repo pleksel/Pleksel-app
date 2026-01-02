@@ -183,49 +183,21 @@ if uploaded_file:
 # =========================================================
 
 def calculate_metrics():
-    units_to_load = []
-
-    if mix_boxes:
-        # 🔀 Alles door elkaar
-        for _, row in df.iterrows():
-            for i in range(int(row['Aantal'])):
-                units_to_load.append({
-                    'order': row['OrderNr'],
-                    'id': f"{row['OrderNr']}_{row['ItemNr']}_{i}",
-                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                    'weight': float(row['Kg']),
-                    'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-                })
-    else:
-        # 📦 Per order gescheiden laden
-        for order_nr, group in df.groupby('OrderNr'):
-            for _, row in group.iterrows():
-                for i in range(int(row['Aantal'])):
-                    units_to_load.append({
-                        'order': order_nr,
-                        'id': f"{order_nr}_{row['ItemNr']}_{i}",
-                        'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
-                        'weight': float(row['Kg']),
-                        'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-                    })
-
-    # --- Orders (gefilterd of alles) ---
-    orders = st.session_state.get(
-        "df_orders_calc",
-        st.session_state.get("df_orders", pd.DataFrame())
-    )
+    # 1. Haal data op uit session_state
+    orders = st.session_state.get("df_orders_calc", st.session_state.get("df_orders", pd.DataFrame()))
     items = st.session_state.get("df_items", pd.DataFrame())
-
+    
+    # 2. Haal instellingen op
     opt_orient = st.session_state.get("opt_orient", False)
-
     mix_boxes = st.session_state.get('mix_boxes', False)
+    MAX_WIDTH = st.session_state.get("trailer_width", 245)
 
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
+    # 3. Data voorbereiden
     orders = orders.copy()
     items = items.copy()
-
     orders["ItemNr"] = orders["ItemNr"].astype(str)
     items["ItemNr"] = items["ItemNr"].astype(str)
 
@@ -233,28 +205,36 @@ def calculate_metrics():
     if df.empty:
         return 0, 0, 0, 0, 0, []
 
-    # --------------------------------------------------
-    # Units genereren
-    # --------------------------------------------------
+    # 4. Units genereren
     units_to_load = []
+    if mix_boxes:
+        for _, row in df.iterrows():
+            for i in range(int(row['Aantal'])):
+                units_to_load.append({
+                    'order': row['OrderNr'],
+                    'id': f"{row['ItemNr']}_{i}",
+                    'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                    'weight': float(row['Kg']),
+                    'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                })
+    else:
+        for order_nr, group in df.groupby('OrderNr'):
+            for _, row in group.iterrows():
+                for i in range(int(row['Aantal'])):
+                    units_to_load.append({
+                        'order': order_nr,
+                        'id': f"{row['ItemNr']}_{i}",
+                        'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                        'weight': float(row['Kg']),
+                        'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                    })
 
-
-
-    # --------------------------------------------------
-    # Simpele stabiele plaatsing (rij-voor-rij)
-    # --------------------------------------------------
+    # 5. Positioneren
     positioned_units = []
-
-    curr_x = 0
-    curr_y = 0
-    row_depth = 0
-
-    MAX_WIDTH = st.session_state.get("trailer_width", 245)
-    SPACING = 2
+    curr_x, curr_y, row_depth, SPACING = 0, 0, 0, 2
 
     for u in units_to_load:
         l, b, h = u["dim"]
-
         if opt_orient and l > b:
             l, b = b, l
 
@@ -263,36 +243,18 @@ def calculate_metrics():
             curr_y = 0
             row_depth = 0
 
-        positioned_units.append({
-            **u,
-            "pos": (curr_x, curr_y),
-            "pz": 0
-        })
-
+        positioned_units.append({**u, "pos": (curr_x, curr_y), "pz": 0, "dim": [l, b, h]})
         curr_y += b + SPACING
         row_depth = max(row_depth, l)
 
-    # --------------------------------------------------
-    # Statistieken
-    # --------------------------------------------------
+    # 6. Statistieken
     total_w = sum(p["weight"] for p in positioned_units)
-    total_v = sum(
-        (p["dim"][0] * p["dim"][1] * p["dim"][2]) / 1_000_000
-        for p in positioned_units
-    )
-
+    total_v = sum((p["dim"][0] * p["dim"][1] * p["dim"][2]) / 1_000_000 for p in positioned_units)
     used_length = curr_x + row_depth
     lm = round(used_length / 100, 2)
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
-    return (
-        round(total_w, 1),
-        round(total_v, 2),
-        len(positioned_units),
-        trucks,
-        lm,
-        positioned_units
-    )
+    return round(total_w, 1), round(total_v, 2), len(positioned_units), trucks, lm, positioned_units
 
     
 
@@ -309,30 +271,14 @@ def calculate_metrics():
 # 5. UI TABS & 3D CALCULATION ENGINE (COMPLETE SECTOR 5)
 # =========================================================
 
+# =========================================================
+# 5. UI TABS
+# =========================================================
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
-
-    with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs([
-        "Items", "Boxes", "Pallets", "Orders", "Trailers"
-    ]) 
-    with tab_data: 
-    with t1:
-        ...
-    with t4:
-        ...
-    with t5:
-        st.subheader("Trailer / Container type")
-        ...
-
-    t1, t2, t3, t4, t5 = st.tabs([
-    "Items",
-    "Boxes",
-    "Pallets",
-    "Orders",
-    "Trailers"
-])
-
+with tab_data:
+    t1, t2, t3, t4, t5 = st.tabs(["Items", "Boxes", "Pallets", "Orders", "Trailers"])
+    
     with t1:
         st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
     with t2:
@@ -341,92 +287,36 @@ tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
         st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
     with t4:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
-with t5:
-    st.subheader("Trailer / Container type")
+    with t5:
+        st.subheader("Trailer / Container type")
+        trailer_type = st.selectbox("Kies trailer", ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"])
+        if trailer_type == "Standaard trailer (13.6m)":
+            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 1360, 245, 270
+        elif trailer_type == "40ft container":
+            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 1203, 235, 239
+        elif trailer_type == "20ft container":
+            st.session_state.trailer_length, st.session_state.trailer_width, st.session_state.trailer_height = 590, 235, 239
+        else:
+            st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
+            st.session_state.trailer_width = st.number_input("Breedte (cm)", 200, 300, 245)
+            st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
 
-    trailer_type = st.selectbox(
-        "Kies trailer",
-        ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
-    )
-
-    if trailer_type == "Standaard trailer (13.6m)":
-        st.session_state.trailer_length = 1360
-        st.session_state.trailer_width  = 245
-        st.session_state.trailer_height = 270
-
-    elif trailer_type == "40ft container":
-        st.session_state.trailer_length = 1203
-        st.session_state.trailer_width  = 235
-        st.session_state.trailer_height = 239
-
-    elif trailer_type == "20ft container":
-        st.session_state.trailer_length = 590
-        st.session_state.trailer_width  = 235
-        st.session_state.trailer_height = 239
-
-    else:  # Custom
-        st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
-        st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
-        st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
-    with tab_calc:
-
-    st.subheader("Order selectie")
-
-   with tab_calc:
-    # Voer berekening uit (houdt rekening met toggles uit de sidebar)
-    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
-
-
+with tab_calc:
+    # --- Order selectie filter logica ---
     orders_df = st.session_state.df_orders
-
-    order_mode = st.radio(
-        "Bereken op basis van:",
-        ["Alle orders", "Eén order", "Meerdere orders"],
-        horizontal=True
-    )
-
-    selected_orders = None
-
-    if order_mode == "Eén order":
-        selected_orders = st.selectbox(
-            "Selecteer order",
-            orders_df["OrderNr"].unique()
-        )
-
-    elif order_mode == "Meerdere orders":
-        selected_orders = st.multiselect(
-            "Selecteer orders",
-            orders_df["OrderNr"].unique()
-        )
-    # --- Orders filteren ---
-    if order_mode == "Alle orders":
-        st.session_state.df_orders_calc = orders_df.copy()
-
-    elif order_mode == "Eén order":
-        st.session_state.df_orders_calc = orders_df[
-            orders_df["OrderNr"] == selected_orders
-        ]
-
-    elif order_mode == "Meerdere orders":
-        st.session_state.df_orders_calc = orders_df[
-            orders_df["OrderNr"].isin(selected_orders)
-        ]
-
-    # Dashboard Metrics
-    c1, c2, c3, c4, c5 = st.columns(5)
-    metrics = [
-        (L['stats_weight'], f"{res_w} kg"), 
-        (L['stats_vol'], f"{res_v} m³"), 
-        (L['stats_pal'], res_p), 
-        (L['stats_trucks'], res_t), 
-        (L['stats_lm'], f"{res_lm} m")
-    ]
-    for i, (label, val) in enumerate(metrics):
-        with [c1, c2, c3, c4, c5][i]:
-            st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
-
-    st.divider()
-
+    if not orders_df.empty:
+        order_mode = st.radio("Bereken op basis van:", ["Alle orders", "Eén order", "Meerdere orders"], horizontal=True)
+        if order_mode == "Eén order":
+            sel = st.selectbox("Selecteer order", orders_df["OrderNr"].unique())
+            st.session_state.df_orders_calc = orders_df[orders_df["OrderNr"] == sel]
+        elif order_mode == "Meerdere orders":
+            sel = st.multiselect("Selecteer orders", orders_df["OrderNr"].unique())
+            st.session_state.df_orders_calc = orders_df[orders_df["OrderNr"].isin(sel)]
+        else:
+            st.session_state.df_orders_calc = orders_df.copy()
+    
+    # Voer berekening uit
+    res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
     # --- 3D INTERACTIEVE TRAILER ---
     st.subheader("3D Trailer Layout & Legenda")
 
@@ -578,6 +468,7 @@ mix_boxes = st.session_state.get("mix_boxes", False)
                 st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
             except Exception as e:
                 st.error(f"Fout bij PDF genereren: {e}")
+
 
 
 
