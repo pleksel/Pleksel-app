@@ -105,21 +105,52 @@ def calculate_metrics():
 # =========================================================
 # 5. UI TABS
 # =========================================================
-tab_data, tab_calc = st.tabs(["01: DATA", "02: PLANNING"])
+tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs(["Items","Boxes","Pallets","Orders","Trailer"])
+    t1, t2, t3, t4, t5 = st.tabs([
+        "Items",
+        "Boxes",
+        "Pallets",
+        "Orders",
+        "Trailers"
+    ])
 
     with t1:
-        st.session_state.df_items = st.data_editor(st.session_state.df_items, num_rows="dynamic")
+        st.session_state.df_items = st.data_editor(
+            st.session_state.df_items,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
     with t2:
-        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, num_rows="dynamic")
+        st.session_state.df_boxes = st.data_editor(
+            st.session_state.df_boxes,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
     with t3:
-        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, num_rows="dynamic")
+        st.session_state.df_pallets = st.data_editor(
+            st.session_state.df_pallets,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
     with t4:
-        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, num_rows="dynamic")
+        st.session_state.df_orders = st.data_editor(
+            st.session_state.df_orders,
+            use_container_width=True,
+            num_rows="dynamic"
+        )
+
     with t5:
-        trailer = st.selectbox("Trailer", ["Standaard", "40ft", "20ft", "Custom"])
+        st.subheader("Trailer / Container type")
+        trailer_type = st.selectbox(
+            "Kies trailer",
+            ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
+        )
+
         if trailer == "Standaard":
             st.session_state.trailer_length = 1360
             st.session_state.trailer_width = 245
@@ -168,3 +199,4 @@ with tab_calc:
             zaxis=dict(range=[0, st.session_state.trailer_height])
         ))
         st.plotly_chart(fig, use_container_width=True)
+
