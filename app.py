@@ -28,7 +28,6 @@ apply_ui_theme()
 if 'lang' not in st.session_state:
     st.session_state.lang = 'NL'
 
-# Dataframes
 for key, cols in {
     'df_items': ["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"],
     'df_boxes': ["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"],
@@ -38,7 +37,6 @@ for key, cols in {
     if key not in st.session_state:
         st.session_state[key] = pd.DataFrame(columns=cols)
 
-# Standaard trailerwaarden
 if 'trailer_length' not in st.session_state:
     st.session_state.trailer_length = 1360
 if 'trailer_width' not in st.session_state:
@@ -107,30 +105,36 @@ def calculate_metrics():
     return round(total_w,1), round(total_v,2), len(placed), trucks, lm, placed
 
 # =========================================================
-# 4. DATA TAB & PLANNING TAB
+# 4. TABS STRUCTUUR
 # =========================================================
 tab_data, tab_calc = st.tabs(["01: DATA INVOER", "02: PLANNING"])
 
+# -------------------------
+# DATA TAB
+# -------------------------
 with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs(["Items","Boxes","Pallets","Orders","Trailer"])
+    st.subheader("Data Input")
 
-    with t1:
+    # Gebruik 1 niveau nested tabs
+    t_items, t_orders = st.tabs(["Items / Boxes / Pallets", "Orders / Trailer"])
+
+    # Tab Items
+    with t_items:
         st.session_state.df_items = st.data_editor(
             st.session_state.df_items, use_container_width=True, num_rows="dynamic"
         )
-    with t2:
         st.session_state.df_boxes = st.data_editor(
             st.session_state.df_boxes, use_container_width=True, num_rows="dynamic"
         )
-    with t3:
         st.session_state.df_pallets = st.data_editor(
             st.session_state.df_pallets, use_container_width=True, num_rows="dynamic"
         )
-    with t4:
+
+    # Tab Orders
+    with t_orders:
         st.session_state.df_orders = st.data_editor(
             st.session_state.df_orders, use_container_width=True, num_rows="dynamic"
         )
-    with t5:
         st.subheader("Trailer / Container type")
         trailer_type = st.selectbox(
             "Kies trailer",
@@ -153,7 +157,11 @@ with tab_data:
             st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
             st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
 
+# -------------------------
+# PLANNING TAB
+# -------------------------
 with tab_calc:
+    st.subheader("Planning & Metrics")
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
 
     # Dashboard metrics
