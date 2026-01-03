@@ -106,9 +106,6 @@ L = T[st.session_state.lang]
 # 3. SIDEBAR (Instellingen & Template Upload)  ✅ FIXED
 # =========================================================
 
-# =========================================================
-# 3. SIDEBAR (Instellingen & Template Upload)  ✅ CLEAN FIX
-# =========================================================
 
 st.sidebar.title(L['settings'])
 
@@ -161,64 +158,89 @@ if uploaded_file:
 # 4. REKEN ENGINE (GEFIKSTE KOLOMNAMEN)
 
 # =========================================================
+# =========================================================
+# 4. REKEN ENGINE (GEFIKST: VOORKOMT UNBOUNDLOCALERROR)
+# =========================================================
 def calculate_metrics():
-    # Initialiseer variabelen bovenaan om UnboundLocalError te voorkomen
-    total_w, total_v, trucks, lm = 0, 0, 0, 0
+    # 1. Initialiseer alle variabelen met 0 of lege lijst
+    total_w, total_v, res_p, trucks, lm = 0.0, 0.0, 0, 0, 0.0
     positioned_units = []
     
+    # 2. Haal data veilig op uit session_state
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
-    TRAILER_L = st.session_state.get("trailer_length", 1360)
-    MAX_WIDTH = st.session_state.get("trailer_width", 245)
-    SPACING = 2
-
+    
+    # 3. Check of er wel data is om mee te werken
     if orders.empty or items.empty:
-        return 0, 0, 0, 0, 0, []
+        return total_w, total_v, res_p, trucks, lm, positioned_units
 
-    items_cp = items.copy()
-    orders_cp = orders.copy()
-    orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
-    items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
+    try:
+        # Data voorbereiden
+        items_cp = items.copy()
+        orders_cp = orders.copy()
+        orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
+        items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
 
-    df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
-    if df.empty:
-        return 0, 0, 0, 0, 0, []
+        # Koppelen van order aan item data
+        df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
+        
+        if df.empty:
+            return total_w, total_v, res_p, trucks, lm, positioned_units
 
-    curr_x, curr_y, row_depth = 0, 0, 0
+        # Trailer instellingen
+        MAX_WIDTH = st.session_state.get("trailer_width", 245)
+        SPACING = 2
+        curr_x, curr_y, row_depth = 0, 0, 0
 
-    for _, row in df.iterrows():
-        for i in range(int(row['Aantal'])):
-            l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
-            if st.session_state.get('opt_orient', True) and l > b:
-                l, b = b, l
+        # Simpele nesting logica (vloer-belading)
+        for _, row in df.iterrows():
+            try:
+                aantal = int(row['Aantal'])
+                l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
+                gew = float(row['Kg'])
+                stapelbaar = str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+            except:
+                continue # Sla rijen met foutieve data over
 
-            if curr_y + b > MAX_WIDTH:
-                curr_x += row_depth + SPACING
-                curr_y, row_depth = 0, 0
-            
-            unit = {
-                'id': f"{row['ItemNr']}_{i}",
-                'dim': [l, b, h],
-                'pos': [curr_x, curr_y],
-                'pz': 0,
-                'weight': float(row['Kg']),
-                'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-            }
-            positioned_units.append(unit)
-            curr_y += b + SPACING
-            row_depth = max(row_depth, l)
+            for i in range(aantal):
+                # Rotatie logica
+                if st.session_state.get('opt_orient', True) and l > b:
+                    l_eff, b_eff = b, l
+                else:
+                    l_eff, b_eff = l, b
 
-    # Bereken totalen
-    total_w = sum(p['weight'] for p in positioned_units)
-    total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
-    used_length = curr_x + row_depth
-    lm = round(used_length / 100, 2)
-    trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
+                # Nieuwe rij in trailer?
+                if curr_y + b_eff > MAX_WIDTH:
+                    curr_x += row_depth + SPACING
+                    curr_y, row_depth = 0, 0
+                
+                unit = {
+                    'id': f"{row['ItemNr']}_{i}",
+                    'dim': [l_eff, b_eff, h],
+                    'pos': [curr_x, curr_y],
+                    'pz': 0, # In deze basisversie alles op de vloer
+                    'weight': gew,
+                    'stackable': stapelbaar
+                }
+                positioned_units.append(unit)
+                
+                curr_y += b_eff + SPACING
+                row_depth = max(row_depth, l_eff)
 
-    return round(total_w, 1), round(total_v, 2), len(positioned_units), trucks, lm, positioned_units
+        # Bereken eindresultaten
+        total_w = sum(p['weight'] for p in positioned_units)
+        total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
+        res_p = len(positioned_units)
+        used_length = curr_x + row_depth
+        lm = round(used_length / 100, 2)
+        trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
+    except Exception as e:
+        st.error(f"Fout in berekening: {e}")
+        # Bij een fout geven we de veilige nul-waarden terug
+        return 0.0, 0.0, 0, 0, 0.0, []
 
-
+    return round(total_w, 1), round(total_v, 2), res_p, trucks, lm, positioned_units
 
 
 # =========================================================
