@@ -50,11 +50,6 @@ apply_ui_theme()
 
 
 
-# =========================================================
-
-# 2. TAAL & INITIALISATIE (FIX VOOR ATTRIBUTE ERROR)
-
-# =========================================================
 
 # =========================================================
 # 2. TAAL & INITIALISATIE (GEFIKST VOOR SESSION STATE)
@@ -111,49 +106,39 @@ L = T[st.session_state.lang]
 # 3. SIDEBAR (Instellingen & Template Upload)  ✅ FIXED
 # =========================================================
 
+# =========================================================
+# 3. SIDEBAR (Instellingen & Template Upload)  ✅ CLEAN FIX
+# =========================================================
+
 st.sidebar.title(L['settings'])
-st.session_state.lang = st.sidebar.selectbox(
-    "Language / Sprache / Taal", ["NL", "EN", "DE"], key="lang_select"
+
+# Taal selectie
+st.sidebar.selectbox(
+    "Language / Sprache / Taal", ["NL", "EN", "DE"], key="lang"
 )
 
-# ---- Berekeningsmethode (SLIDER) ----
-st.session_state.calc_mode = st.sidebar.select_slider(
+# ---- Berekeningsmethode ----
+st.sidebar.select_slider(
     "Berekeningsmethode",
     options=["Automatisch (Volume)", "Handmatig (Volle units)"],
-    value=st.session_state.get("calc_mode", "Handmatig (Volle units)"),
+    key="calc_mode",
     help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
 )
 
-# ---- Toggles (MOETEN in session_state!) ----
-st.session_state.mix_boxes = st.sidebar.toggle(
-    L['mix'], value=st.session_state.get("mix_boxes", False)
-)
-
-st.session_state.opt_stack = st.sidebar.toggle(
-    L['stack'], value=st.session_state.get("opt_stack", True)
-)
-
-st.session_state.opt_orient = st.sidebar.toggle(
-    L['orient'], value=st.session_state.get("opt_orient", True)
-)
+# ---- Toggles (Gekoppeld via 'key') ----
+st.sidebar.toggle(L['mix'], key="mix_boxes")
+st.sidebar.toggle(L['stack'], key="opt_stack")
+st.sidebar.toggle(L['orient'], key="opt_orient")
 
 st.sidebar.divider()
 
-# ---- Template Download ----
+# ---- Template Download (Gefikste Excel Buffer) ----
 buffer_dl = io.BytesIO()
 with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
-    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(
-        writer, sheet_name='Item Data', index=False
-    )
-    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(
-        writer, sheet_name='Box Data', index=False
-    )
-    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(
-        writer, sheet_name='Pallet Data', index=False
-    )
-    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(
-        writer, sheet_name='Order Data', index=False
-    )
+    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
+    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
+    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
+    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
 
 st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "pleksel_template.xlsx")
 
@@ -167,6 +152,7 @@ if uploaded_file:
         st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
         st.sidebar.success("Geladen!")
+        st.rerun() # Pagina verversen om data direct te tonen
     except Exception as e:
         st.sidebar.error(f"Fout in bestand: {e}")
 
