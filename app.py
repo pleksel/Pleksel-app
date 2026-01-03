@@ -184,12 +184,13 @@ if uploaded_file:
 # 4. REKEN ENGINE (GEFIKSTE KOLOMNAMEN)
 
 # =========================================================
-
 def calculate_metrics():
+    # Initialiseer variabelen bovenaan om UnboundLocalError te voorkomen
+    total_w, total_v, trucks, lm = 0, 0, 0, 0
+    positioned_units = []
+    
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
-    
-    # Trailer instellingen ophalen
     TRAILER_L = st.session_state.get("trailer_length", 1360)
     MAX_WIDTH = st.session_state.get("trailer_width", 245)
     SPACING = 2
@@ -206,46 +207,34 @@ def calculate_metrics():
     if df.empty:
         return 0, 0, 0, 0, 0, []
 
-    units_to_load = []
-    positioned_units = []
     curr_x, curr_y, row_depth = 0, 0, 0
 
     for _, row in df.iterrows():
         for i in range(int(row['Aantal'])):
-            l = float(row['L_cm'])
-            b = float(row['B_cm'])
-            h = float(row['H_cm'])
-            
-            # Oriëntatie optimalisatie
+            l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
             if st.session_state.get('opt_orient', True) and l > b:
                 l, b = b, l
 
-            # Check of het in de huidige rij past qua breedte
             if curr_y + b > MAX_WIDTH:
                 curr_x += row_depth + SPACING
-                curr_y = 0
-                row_depth = 0
+                curr_y, row_depth = 0, 0
             
-            # Positioneer de unit
             unit = {
                 'id': f"{row['ItemNr']}_{i}",
                 'dim': [l, b, h],
                 'pos': [curr_x, curr_y],
-                'pz': 0, # Basis hoogte
+                'pz': 0,
                 'weight': float(row['Kg']),
                 'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
             }
-            
             positioned_units.append(unit)
-            
-            # Update coördinaten voor de volgende unit
             curr_y += b + SPACING
             row_depth = max(row_depth, l)
 
-    # Bereken totalen NA de loop
+    # Bereken totalen
     total_w = sum(p['weight'] for p in positioned_units)
     total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
-    used_length = min(curr_x + row_depth, TRAILER_L)
+    used_length = curr_x + row_depth
     lm = round(used_length / 100, 2)
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
@@ -363,20 +352,18 @@ with tab_calc:
             ))
 
         # Trailer visualisatie instellingen
-        trailer_len = 1360
+       # Haal actuele maten uit session_state voor de visualisatie
+        t_l = st.session_state.get("trailer_length", 1360)
+        t_w = st.session_state.get("trailer_width", 245)
+        t_h = st.session_state.get("trailer_height", 270)
 
         fig.update_layout(
             scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0, trailer_len], backgroundcolor="#0f172a"),
-                yaxis=dict(title='Breedte (cm)', range=[0, 245], backgroundcolor="#0f172a"),
-                zaxis=dict(title='Hoogte (cm)', range=[0, 270], backgroundcolor="#0f172a"),
+                xaxis=dict(title='Lengte (cm)', range=[0, t_l], backgroundcolor="#0f172a"),
+                yaxis=dict(title='Breedte (cm)', range=[0, t_w], backgroundcolor="#0f172a"),
+                zaxis=dict(title='Hoogte (cm)', range=[0, t_h], backgroundcolor="#0f172a"),
                 aspectmode='manual',
-              aspectratio=dict(
-    x=trailer_len / trailer_w,
-    y=1,
-    z=trailer_h / trailer_w
-)
-
+                aspectratio=dict(x=t_l/t_w, y=1, z=t_h/t_w)
             ),
             paper_bgcolor='rgba(0,0,0,0)',
             margin=dict(l=0, r=0, b=0, t=0),
@@ -389,14 +376,10 @@ with tab_calc:
         with col_leg:
             st.markdown("### Legenda")
             for itype, icolor in item_color_map.items():
-                st.markdown(f"""
-                    <div style="display: flex; align-items: center; margin-bottom: 5px;">
-                        <div style="width: 20px; height: 20px; background-color: {icolor}; border-radius: 4px; margin-right: 10px;"></div>
-                        <span>Item: {itype}</span>
-                    </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background-color: {icolor}; border-radius: 4px; margin-right: 10px;"></div><span>Item: {itype}</span></div>', unsafe_allow_html=True)
             
-            st.info(f"**Status:**\n- Mix: {'AAN' if mix_boxes else 'UIT'}\n- Stapel: {'AAN' if opt_stack else 'UIT'}\n- Orient: {'AAN' if opt_orient else 'UIT'}")
+            # Fix: gebruik st.session_state voor de toggles
+            st.info(f"**Status:**\n- Mix: {'AAN' if st.session_state.mix_boxes else 'UIT'}\n- Stapel: {'AAN' if st.session_state.opt_stack else 'UIT'}\n- Orient: {'AAN' if st.session_state.opt_orient else 'UIT'}")
 
         # --- PDF EXPORT ---
         st.divider()
