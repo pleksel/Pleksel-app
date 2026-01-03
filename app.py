@@ -140,18 +140,26 @@ with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
 st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "pleksel_template.xlsx")
 
 # ---- Upload ----
+
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
 if uploaded_file:
     try:
-        xls = pd.ExcelFile(uploaded_file)
+        # We gebruiken openpyxl als engine voor .xlsx bestanden
+        xls = pd.ExcelFile(uploaded_file, engine='openpyxl')
+        
+        # We lezen de sheets in en gebruiken .strip() om onzichtbare spaties in kolomnamen te voorkomen
         st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
         st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
         st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
-        st.sidebar.success("Geladen!")
-        st.rerun() # Pagina verversen om data direct te tonen
+        
+        st.sidebar.success("✅ Bestand succesvol geladen!")
+        st.rerun() 
+    except ValueError as e:
+        # Deze fout komt vaak voor als een bladnaam (sheet) niet wordt gevonden
+        st.sidebar.error(f"Bladnaam niet gevonden: Controleer of de tabbladen 'Item Data', 'Box Data', etc. heten.")
     except Exception as e:
-        st.sidebar.error(f"Fout in bestand: {e}")
+        st.sidebar.error(f"Fout bij inlezen: {e}")
 
 # =========================================================
 
