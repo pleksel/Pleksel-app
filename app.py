@@ -56,63 +56,54 @@ apply_ui_theme()
 
 # =========================================================
 
+# =========================================================
+# 2. TAAL & INITIALISATIE (GEFIKST VOOR SESSION STATE)
+# =========================================================
 if 'lang' not in st.session_state: 
-
     st.session_state.lang = 'NL'
 
+# --- NIEUW: Initialiseer de toggle-instellingen ---
+if 'mix_boxes' not in st.session_state:
+    st.session_state.mix_boxes = False
+if 'opt_stack' not in st.session_state:
+    st.session_state.opt_stack = True
+if 'opt_orient' not in st.session_state:
+    st.session_state.opt_orient = True
+if 'calc_mode' not in st.session_state:
+    st.session_state.calc_mode = "Handmatig (Volle units)"
 
+# Initialiseer trailer afmetingen
+if 'trailer_length' not in st.session_state:
+    st.session_state.trailer_length = 1360
+if 'trailer_width' not in st.session_state:
+    st.session_state.trailer_width = 245
+if 'trailer_height' not in st.session_state:
+    st.session_state.trailer_height = 270
 
-# Zorg dat de dataframes altijd bestaan voordat de rest van de app start
-
+# Zorg dat de dataframes altijd bestaan
 if 'df_items' not in st.session_state:
-
     st.session_state.df_items = pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"])
 
-
-
 if 'df_boxes' not in st.session_state:
-
     st.session_state.df_boxes = pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"])
 
-
-
 if 'df_pallets' not in st.session_state:
-
     st.session_state.df_pallets = pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"])
 
-
-
 if 'df_orders' not in st.session_state:
-
     st.session_state.df_orders = pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"])
 
-
-
 T = {
-
     'NL': {
-
         'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen", 
-
         'orient': "Lang/Breed laden", 'data_tab': "01: DATA INVOER", 'calc_tab': "02: PLANNING",
-
         'item_data': "Item Data", 'box_data': "Box Data", 'pallet_data': "Pallet Data",
-
         'order_data': "Order Data", 'truck': "Truck/Container", 'download': "Download Template", 
-
         'upload': "Upload Template", 'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 
-
-        'stats_pal': "Aantal Pallets", 'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
-
+        'stats_pal': "Aantal Units", 'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
     }
-
 }
-
 L = T[st.session_state.lang]
-
-
-
-
 
 
 
