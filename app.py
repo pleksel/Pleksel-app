@@ -158,89 +158,83 @@ if uploaded_file:
 # 4. REKEN ENGINE (GEFIKSTE KOLOMNAMEN)
 
 # =========================================================
-# =========================================================
-# 4. REKEN ENGINE (GEFIKST: VOORKOMT UNBOUNDLOCALERROR)
-# =========================================================
 def calculate_metrics():
-    # 1. Initialiseer alle variabelen met 0 of lege lijst
-    total_w, total_v, res_p, trucks, lm = 0.0, 0.0, 0, 0, 0.0
+    # 1. INITIALISATIE: Zet alles op nul zodat de return altijd werkt
+    total_w = 0.0
+    total_v = 0.0
+    trucks = 0
+    lm = 0.0
     positioned_units = []
     
-    # 2. Haal data veilig op uit session_state
+    # Haal data veilig op
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
     
-    # 3. Check of er wel data is om mee te werken
+    # 2. CHECK: Als er geen data is, geef direct de nul-waarden terug
     if orders.empty or items.empty:
-        return total_w, total_v, res_p, trucks, lm, positioned_units
+        return 0.0, 0.0, 0, 0, 0.0, []
 
     try:
-        # Data voorbereiden
+        # Data opschonen
         items_cp = items.copy()
         orders_cp = orders.copy()
         orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
         items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
 
-        # Koppelen van order aan item data
+        # Merge data
         df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
-        
         if df.empty:
-            return total_w, total_v, res_p, trucks, lm, positioned_units
+            return 0.0, 0.0, 0, 0, 0.0, []
 
-        # Trailer instellingen
         MAX_WIDTH = st.session_state.get("trailer_width", 245)
         SPACING = 2
         curr_x, curr_y, row_depth = 0, 0, 0
 
-        # Simpele nesting logica (vloer-belading)
+        # 3. BEREKENING
         for _, row in df.iterrows():
             try:
                 aantal = int(row['Aantal'])
                 l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
-                gew = float(row['Kg'])
-                stapelbaar = str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
+                
+                for i in range(aantal):
+                    # Rotatie
+                    if st.session_state.get('opt_orient', True) and l > b:
+                        l_eff, b_eff = b, l
+                    else:
+                        l_eff, b_eff = l, b
+
+                    if curr_y + b_eff > MAX_WIDTH:
+                        curr_x += row_depth + SPACING
+                        curr_y, row_depth = 0, 0
+                    
+                    unit = {
+                        'id': f"{row['ItemNr']}_{i}",
+                        'dim': [l_eff, b_eff, h],
+                        'pos': [curr_x, curr_y],
+                        'pz': 0,
+                        'weight': float(row['Kg'])
+                    }
+                    positioned_units.append(unit)
+                    
+                    curr_y += b_eff + SPACING
+                    row_depth = max(row_depth, l_eff)
             except:
-                continue # Sla rijen met foutieve data over
+                continue
 
-            for i in range(aantal):
-                # Rotatie logica
-                if st.session_state.get('opt_orient', True) and l > b:
-                    l_eff, b_eff = b, l
-                else:
-                    l_eff, b_eff = l, b
-
-                # Nieuwe rij in trailer?
-                if curr_y + b_eff > MAX_WIDTH:
-                    curr_x += row_depth + SPACING
-                    curr_y, row_depth = 0, 0
-                
-                unit = {
-                    'id': f"{row['ItemNr']}_{i}",
-                    'dim': [l_eff, b_eff, h],
-                    'pos': [curr_x, curr_y],
-                    'pz': 0, # In deze basisversie alles op de vloer
-                    'weight': gew,
-                    'stackable': stapelbaar
-                }
-                positioned_units.append(unit)
-                
-                curr_y += b_eff + SPACING
-                row_depth = max(row_depth, l_eff)
-
-        # Bereken eindresultaten
-        total_w = sum(p['weight'] for p in positioned_units)
-        total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
-        res_p = len(positioned_units)
-        used_length = curr_x + row_depth
-        lm = round(used_length / 100, 2)
-        trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
+        # 4. TOTALEN BEREKENEN
+        if positioned_units:
+            total_w = sum(p['weight'] for p in positioned_units)
+            total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
+            used_length = curr_x + row_depth
+            lm = round(used_length / 100, 2)
+            trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
     except Exception as e:
-        st.error(f"Fout in berekening: {e}")
-        # Bij een fout geven we de veilige nul-waarden terug
-        return 0.0, 0.0, 0, 0, 0.0, []
+        # Laat een foutmelding zien in de app maar laat hem niet crashen
+        st.error(f"Berekeningsfout: {e}")
 
-    return round(total_w, 1), round(total_v, 2), res_p, trucks, lm, positioned_units
+    # 5. DE RETURN (Nu met de juiste namen)
+    return round(total_w, 1), round(total_v, 2), len(positioned_units), trucks, lm, positioned_units
 
 
 # =========================================================
