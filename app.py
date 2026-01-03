@@ -1,409 +1,186 @@
 import pandas as pd
-
 import numpy as np
-
 import plotly.graph_objects as go
-
 from fpdf import FPDF
-
 import io
-
-import streamlit as st  # Deze ontbrak
-
-
+import streamlit as st
 
 # =========================================================
-
 # 1. UI & THEME
-
 # =========================================================
-
 st.set_page_config(page_title="PLEKSEL TRAILER ENGINE", layout="wide")
 
-
-
 def apply_ui_theme():
-
     st.markdown("""
-
     <style>
-
         .stApp { background-color: #020408; color: #e2e8f0; }
-
         section[data-testid="stSidebar"] { background-color: #000000 !important; border-right: 1px solid #38bdf8; }
-
-        .table-header { color: #38bdf8; font-weight: bold; border-bottom: 2px solid #38bdf8; padding: 5px 0; margin-top: 20px; margin-bottom: 10px; }
-
         div.stButton > button { background-color: #38bdf8 !important; color: #000 !important; font-weight: bold; border-radius: 4px; }
-
         .metric-card { background: #111827; border: 1px solid #38bdf8; padding: 15px; border-radius: 8px; text-align: center; }
-
         .metric-val { color: #38bdf8; font-size: 24px; font-weight: bold; }
-
     </style>
-
     """, unsafe_allow_html=True)
-
-
 
 apply_ui_theme()
 
-
-
-
 # =========================================================
-# 2. TAAL & INITIALISATIE (GEFIKST VOOR SESSION STATE)
+# 2. INITIALISATIE
 # =========================================================
-if 'lang' not in st.session_state: 
-    st.session_state.lang = 'NL'
-
-# --- NIEUW: Initialiseer de toggle-instellingen ---
-if 'mix_boxes' not in st.session_state:
-    st.session_state.mix_boxes = False
-if 'opt_stack' not in st.session_state:
-    st.session_state.opt_stack = True
-if 'opt_orient' not in st.session_state:
-    st.session_state.opt_orient = True
-if 'calc_mode' not in st.session_state:
-    st.session_state.calc_mode = "Handmatig (Volle units)"
-
-# Initialiseer trailer afmetingen
-if 'trailer_length' not in st.session_state:
-    st.session_state.trailer_length = 1360
-if 'trailer_width' not in st.session_state:
-    st.session_state.trailer_width = 245
-if 'trailer_height' not in st.session_state:
-    st.session_state.trailer_height = 270
-
-# Zorg dat de dataframes altijd bestaan
-if 'df_items' not in st.session_state:
-    st.session_state.df_items = pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"])
-
-if 'df_boxes' not in st.session_state:
-    st.session_state.df_boxes = pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"])
-
-if 'df_pallets' not in st.session_state:
-    st.session_state.df_pallets = pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"])
-
-if 'df_orders' not in st.session_state:
-    st.session_state.df_orders = pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"])
+# Initialiseer alle session state variabelen
+for key, val in {
+    'lang': 'NL', 'mix_boxes': False, 'opt_stack': True, 'opt_orient': True,
+    'calc_mode': "Handmatig (Volle units)", 'trailer_length': 1360,
+    'trailer_width': 245, 'trailer_height': 270,
+    'df_items': pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]),
+    'df_boxes': pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]),
+    'df_pallets': pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]),
+    'df_orders': pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"])
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 T = {
     'NL': {
         'settings': "Trailer Instellingen", 'mix': "Mix Boxes", 'stack': "Pallets Stapelen", 
         'orient': "Lang/Breed laden", 'data_tab': "01: DATA INVOER", 'calc_tab': "02: PLANNING",
         'item_data': "Item Data", 'box_data': "Box Data", 'pallet_data': "Pallet Data",
-        'order_data': "Order Data", 'truck': "Truck/Container", 'download': "Download Template", 
-        'upload': "Upload Template", 'stats_weight': "Totaal Gewicht", 'stats_vol': "Totaal Volume", 
-        'stats_pal': "Aantal Units", 'stats_trucks': "Aantal Trucks", 'stats_lm': "Laadmeters"
+        'order_data': "Order Data", 'download': "Download Template", 
+        'upload': "Upload Template", 'stats_weight': "Gewicht", 'stats_vol': "Volume", 
+        'stats_pal': "Units", 'stats_trucks': "Trucks", 'stats_lm': "Meters"
     }
 }
-L = T[st.session_state.lang]
-
-
+L = T.get(st.session_state.lang, T['NL'])
 
 # =========================================================
-# 3. SIDEBAR (Instellingen & Template Upload)  ✅ FIXED
+# 3. SIDEBAR
 # =========================================================
-
-
 st.sidebar.title(L['settings'])
-
-# Taal selectie
-st.sidebar.selectbox(
-    "Language / Sprache / Taal", ["NL", "EN", "DE"], key="lang"
-)
-
-# ---- Berekeningsmethode ----
-st.sidebar.select_slider(
-    "Berekeningsmethode",
-    options=["Automatisch (Volume)", "Handmatig (Volle units)"],
-    key="calc_mode",
-    help="Automatisch berekent hoeveel er op een pallet past. Handmatig ziet elke order-regel als een aparte unit."
-)
-
-# ---- Toggles (Gekoppeld via 'key') ----
+st.sidebar.selectbox("Taal", ["NL", "EN", "DE"], key="lang")
+st.sidebar.select_slider("Methode", options=["Automatisch (Volume)", "Handmatig (Volle units)"], key="calc_mode")
 st.sidebar.toggle(L['mix'], key="mix_boxes")
 st.sidebar.toggle(L['stack'], key="opt_stack")
 st.sidebar.toggle(L['orient'], key="opt_orient")
 
-st.sidebar.divider()
-
-# ---- Template Download (Gefikste Excel Buffer) ----
+# Template Download
 buffer_dl = io.BytesIO()
 with pd.ExcelWriter(buffer_dl, engine='xlsxwriter') as writer:
-    pd.DataFrame(columns=["ItemNr", "L_cm", "B_cm", "H_cm", "Kg", "Stapelbaar"]).to_excel(writer, sheet_name='Item Data', index=False)
-    pd.DataFrame(columns=["BoxNaam", "L_cm", "B_cm", "H_cm", "LeegKg"]).to_excel(writer, sheet_name='Box Data', index=False)
-    pd.DataFrame(columns=["PalletType", "L_cm", "B_cm", "EigenKg", "MaxH_cm"]).to_excel(writer, sheet_name='Pallet Data', index=False)
-    pd.DataFrame(columns=["OrderNr", "ItemNr", "Aantal"]).to_excel(writer, sheet_name='Order Data', index=False)
+    st.session_state.df_items.to_excel(writer, sheet_name='Item Data', index=False)
+    st.session_state.df_orders.to_excel(writer, sheet_name='Order Data', index=False)
+st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "template.xlsx")
 
-st.sidebar.download_button(L['download'], buffer_dl.getvalue(), "pleksel_template.xlsx")
-
-# ---- Upload ----
+# Excel Upload FIX (engine toegevoegd)
 uploaded_file = st.sidebar.file_uploader(L['upload'], type=['xlsx'])
 if uploaded_file:
     try:
-        xls = pd.ExcelFile(uploaded_file)
+        xls = pd.ExcelFile(uploaded_file, engine='openpyxl')
         st.session_state.df_items = pd.read_excel(xls, 'Item Data').fillna(0)
-        st.session_state.df_boxes = pd.read_excel(xls, 'Box Data').fillna(0)
-        st.session_state.df_pallets = pd.read_excel(xls, 'Pallet Data').fillna(0)
         st.session_state.df_orders = pd.read_excel(xls, 'Order Data').fillna(0)
         st.sidebar.success("Geladen!")
-        st.rerun() # Pagina verversen om data direct te tonen
+        st.rerun()
     except Exception as e:
-        st.sidebar.error(f"Fout in bestand: {e}")
+        st.sidebar.error(f"Bestand fout: {e}")
 
 # =========================================================
-
-# 4. REKEN ENGINE (GEFIKSTE KOLOMNAMEN)
-
+# 4. REKEN ENGINE (VEILIG TEGEN CRASHES)
 # =========================================================
 def calculate_metrics():
-    # 1. INITIALISATIE: Zet alles op nul zodat de return altijd werkt
-    total_w = 0.0
-    total_v = 0.0
-    trucks = 0
-    lm = 0.0
+    total_w, total_v, trucks, lm = 0.0, 0.0, 0, 0.0
     positioned_units = []
     
-    # Haal data veilig op
-    orders = st.session_state.get('df_orders', pd.DataFrame())
-    items = st.session_state.get('df_items', pd.DataFrame())
+    orders = st.session_state.df_orders
+    items = st.session_state.df_items
     
-    # 2. CHECK: Als er geen data is, geef direct de nul-waarden terug
     if orders.empty or items.empty:
         return 0.0, 0.0, 0, 0, 0.0, []
 
     try:
-        # Data opschonen
-        items_cp = items.copy()
-        orders_cp = orders.copy()
-        orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
-        items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
+        # Data types fix
+        ord_c = orders.copy().astype({'ItemNr': str, 'Aantal': float})
+        itm_c = items.copy().astype({'ItemNr': str, 'L_cm': float, 'B_cm': float, 'Kg': float})
+        df = pd.merge(ord_c, itm_c, on="ItemNr", how="inner")
 
-        # Merge data
-        df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
-        if df.empty:
-            return 0.0, 0.0, 0, 0, 0.0, []
+        max_w = float(st.session_state.trailer_width)
+        curr_x, curr_y, row_depth = 0.0, 0.0, 0.0
 
-        MAX_WIDTH = st.session_state.get("trailer_width", 245)
-        SPACING = 2
-        curr_x, curr_y, row_depth = 0, 0, 0
-
-        # 3. BEREKENING
         for _, row in df.iterrows():
-            try:
-                aantal = int(row['Aantal'])
-                l, b, h = float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])
+            for i in range(int(row['Aantal'])):
+                l, b, h = row['L_cm'], row['B_cm'], float(row['H_cm'])
+                # Rotatie check
+                l_eff, b_eff = (b, l) if (st.session_state.opt_orient and l > b and curr_y + l <= max_w) else (l, b)
+
+                if curr_y + b_eff > max_w:
+                    curr_x += row_depth + 2
+                    curr_y, row_depth = 0.0, 0.0
                 
-                for i in range(aantal):
-                    # Rotatie
-                    if st.session_state.get('opt_orient', True) and l > b:
-                        l_eff, b_eff = b, l
-                    else:
-                        l_eff, b_eff = l, b
+                positioned_units.append({
+                    'id': f"{row['ItemNr']}_{i}",
+                    'dim': [l_eff, b_eff, h],
+                    'pos': [curr_x, curr_y],
+                    'pz': 0,
+                    'weight': row['Kg']
+                })
+                curr_y += b_eff + 2
+                row_depth = max(row_depth, l_eff)
 
-                    if curr_y + b_eff > MAX_WIDTH:
-                        curr_x += row_depth + SPACING
-                        curr_y, row_depth = 0, 0
-                    
-                    unit = {
-                        'id': f"{row['ItemNr']}_{i}",
-                        'dim': [l_eff, b_eff, h],
-                        'pos': [curr_x, curr_y],
-                        'pz': 0,
-                        'weight': float(row['Kg'])
-                    }
-                    positioned_units.append(unit)
-                    
-                    curr_y += b_eff + SPACING
-                    row_depth = max(row_depth, l_eff)
-            except:
-                continue
-
-        # 4. TOTALEN BEREKENEN
         if positioned_units:
-            total_w = sum(p['weight'] for p in positioned_units)
-            total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
-            used_length = curr_x + row_depth
-            lm = round(used_length / 100, 2)
+            total_w = sum(u['weight'] for u in positioned_units)
+            total_v = sum((u['dim'][0]*u['dim'][1]*u['dim'][2])/1000000 for u in positioned_units)
+            lm = round((curr_x + row_depth) / 100, 2)
             trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
     except Exception as e:
-        # Laat een foutmelding zien in de app maar laat hem niet crashen
-        st.error(f"Berekeningsfout: {e}")
+        st.error(f"Engine Fout: {e}")
 
-    # 5. DE RETURN (Nu met de juiste namen)
     return round(total_w, 1), round(total_v, 2), len(positioned_units), trucks, lm, positioned_units
 
-
 # =========================================================
-# 5. UI TABS & 3D CALCULATION ENGINE (COMPLETE SECTOR 5)
+# 5. UI TABS & VISUALISATIE
 # =========================================================
-
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs(["Items", "Boxes", "Pallets", "Orders", "Trailers"])
-
-    with t1:
-        st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
-    with t2:
-        st.session_state.df_boxes = st.data_editor(st.session_state.df_boxes, use_container_width=True, num_rows="dynamic", key="ed_boxes")
-    with t3:
-        st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
-    with t4:
-        st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
-    
-    with t5:
-        st.subheader("Trailer / Container type")
-        trailer_type = st.selectbox(
-            "Kies trailer",
-            ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
-        )
-
-        if trailer_type == "Standaard trailer (13.6m)":
-            st.session_state.trailer_length = 1360
-            st.session_state.trailer_width  = 245
-            st.session_state.trailer_height = 270
-        elif trailer_type == "40ft container":
-            st.session_state.trailer_length = 1203
-            st.session_state.trailer_width  = 235
-            st.session_state.trailer_height = 239
-        elif trailer_type == "20ft container":
-            st.session_state.trailer_length = 590
-            st.session_state.trailer_width  = 235
-            st.session_state.trailer_height = 239
-        else:  # Custom
-            st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
-            st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
-            st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
+    st.subheader("Data Invoer")
+    st.session_state.df_items = st.data_editor(st.session_state.df_items, num_rows="dynamic", key="editor_items")
+    st.session_state.df_orders = st.data_editor(st.session_state.df_orders, num_rows="dynamic", key="editor_orders")
 
 with tab_calc:
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
 
-    # Dashboard Metrics
-    c1, c2, c3, c4, c5 = st.columns(5)
-    metrics = [
-        (L['stats_weight'], f"{res_w} kg"), 
-        (L['stats_vol'], f"{res_v} m³"), 
-        (L['stats_pal'], res_p), 
-        (L['stats_trucks'], res_t), 
-        (L['stats_lm'], f"{res_lm} m")
-    ]
-    for i, (label, val) in enumerate(metrics):
-        with [c1, c2, c3, c4, c5][i]:
-            st.markdown(f"<div class='metric-card'><small>{label}</small><br><span class='metric-val'>{val}</span></div>", unsafe_allow_html=True)
+    cols = st.columns(5)
+    labels = [L['stats_weight'], L['stats_vol'], L['stats_pal'], L['stats_trucks'], L['stats_lm']]
+    vals = [f"{res_w}kg", f"{res_v}m3", res_p, res_t, f"{res_lm}m"]
+    for i, col in enumerate(cols):
+        col.metric(labels[i], vals[i])
 
-    st.divider()
-
-    # --- 3D INTERACTIEVE TRAILER ---
-    st.subheader("3D Trailer Layout & Legenda")
-
-    if not active_units:
-        st.info("Geen data om te visualiseren. Voer orders in bij Tab 01.")
-    else:
-        # Layout met kolom voor legenda
-        col_viz, col_leg = st.columns([4, 1])
-
+    if active_units:
         fig = go.Figure()
-        colors = ['#0ea5e9', '#f59e0b', '#ef4444', '#10b981', '#8b5cf6', '#ec4899', '#f43f5e', '#06b6d4']
-        item_color_map = {}
-
         for p in active_units:
+            x, y, z = p['pos'][0], p['pos'][1], p['pz']
             l, b, h = p['dim']
-            x, y, z_base = p['pos'][0], p['pos'][1], p['pz']
-            
-            # Kleur bepalen op basis van ItemNr (prefix van ID)
-            item_type = str(p['id']).split('_')[0]
-            if item_type not in item_color_map:
-                item_color_map[item_type] = colors[len(item_color_map) % len(colors)]
-            
-            base_color = item_color_map[item_type]
-
-            # 3D Mesh constructie (Shader look)
             fig.add_trace(go.Mesh3d(
                 x=[x, x, x+l, x+l, x, x, x+l, x+l],
                 y=[y, y+b, y+b, y, y, y+b, y+b, y],
-                z=[z_base, z_base, z_base, z_base, z_base+h, z_base+h, z_base+h, z_base+h],
-                i=[7, 0, 0, 0, 4, 4, 6, 6, 4, 0, 3, 2],
-                j=[3, 4, 1, 2, 5, 6, 5, 2, 0, 1, 6, 3],
-                k=[0, 7, 2, 3, 6, 7, 1, 1, 5, 5, 7, 6],
-                color=base_color,
-                opacity=0.9,
-                flatshading=True,
-                name=f"Type: {item_type}",
-                hoverinfo="text",
-                customdata=[[item_type, l, b, h, p['weight'], "Ja" if p.get('stackable', True) else "Nee"]],
-                hovertemplate=(
-                    "<b>Item: %{customdata[0]}</b><br>" +
-                    "Afmetingen: %{customdata[1]}x%{customdata[2]}x%{customdata[3]} cm<br>" +
-                    "Gewicht: %{customdata[4]} kg<br>" +
-                    "Stapelbaar: %{customdata[5]}<br>" +
-                    "<extra></extra>"
-                )
+                z=[z, z, z, z, z+h, z+h, z+h, z+h],
+                i=[7,0,0,0,4,4,6,6,4,0,3,2], j=[3,4,1,2,5,6,5,2,0,1,6,3], k=[0,7,2,3,6,7,1,1,5,5,7,6],
+                color="#38bdf8", opacity=0.8
             ))
+        fig.update_layout(scene=dict(aspectmode='data'), margin=dict(l=0,r=0,b=0,t=0))
+        st.plotly_chart(fig, use_container_width=True)
 
-        # Trailer visualisatie instellingen
-       # Haal actuele maten uit session_state voor de visualisatie
-        t_l = st.session_state.get("trailer_length", 1360)
-        t_w = st.session_state.get("trailer_width", 245)
-        t_h = st.session_state.get("trailer_height", 270)
-
-        fig.update_layout(
-            scene=dict(
-                xaxis=dict(title='Lengte (cm)', range=[0, t_l], backgroundcolor="#0f172a"),
-                yaxis=dict(title='Breedte (cm)', range=[0, t_w], backgroundcolor="#0f172a"),
-                zaxis=dict(title='Hoogte (cm)', range=[0, t_h], backgroundcolor="#0f172a"),
-                aspectmode='manual',
-                aspectratio=dict(x=t_l/t_w, y=1, z=t_h/t_w)
-            ),
-            paper_bgcolor='rgba(0,0,0,0)',
-            margin=dict(l=0, r=0, b=0, t=0),
-            showlegend=False
-        )
-
-        with col_viz:
-            st.plotly_chart(fig, use_container_width=True)
-
-        with col_leg:
-            st.markdown("### Legenda")
-            for itype, icolor in item_color_map.items():
-                st.markdown(f'<div style="display: flex; align-items: center; margin-bottom: 5px;"><div style="width: 20px; height: 20px; background-color: {icolor}; border-radius: 4px; margin-right: 10px;"></div><span>Item: {itype}</span></div>', unsafe_allow_html=True)
+        # PDF FIX (Safe encoding)
+        if st.button("Genereer PDF"):
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", 'B', 14)
+            pdf.cell(190, 10, "PLEKSEL LAADPLAN", ln=True, align='C')
+            pdf.set_font("Arial", '', 10)
+            pdf.cell(190, 10, f"Gewicht: {res_w}kg | Meters: {res_lm}m", ln=True)
             
-            # Fix: gebruik st.session_state voor de toggles
-            st.info(f"**Status:**\n- Mix: {'AAN' if st.session_state.mix_boxes else 'UIT'}\n- Stapel: {'AAN' if st.session_state.opt_stack else 'UIT'}\n- Orient: {'AAN' if st.session_state.opt_orient else 'UIT'}")
-
-        # --- PDF EXPORT ---
-        st.divider()
-        if st.button("Genereer PDF Rapport"):
-            try:
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_font("Arial", 'B', 16)
-                pdf.cell(190, 10, "PLEKSEL TRAILER LAADPLAN", ln=True, align='C')
-                pdf.ln(10)
-                
-                # Stats in PDF
-                pdf.set_font("Arial", 'B', 12)
-                pdf.cell(190, 10, f"Totaal Gewicht: {res_w} kg | Laadmeters: {res_lm} m", ln=True)
-                pdf.ln(5)
-
-                # Tabel met laadlijst
-                pdf.set_font("Arial", 'B', 10)
-                pdf.cell(60, 8, "Item ID", border=1)
-                pdf.cell(40, 8, "Afmetingen", border=1)
-                pdf.cell(40, 8, "Positie (X,Y)", border=1)
-                pdf.cell(40, 8, "Hoogte (Z)", border=1, ln=True)
-
-                pdf.set_font("Arial", '', 9)
-                for p in active_units:
-                    pdf.cell(60, 7, str(p['id']), border=1)
-                    pdf.cell(40, 7, f"{p['dim'][0]}x{p['dim'][1]}", border=1)
-                    pdf.cell(40, 7, f"{round(p['pos'][0])},{round(p['pos'][1])}", border=1)
-                    pdf.cell(40, 7, f"{round(p['pz'])}", border=1, ln=True)
-
-                pdf_bytes = pdf.output(dest='S').encode('latin-1')
-                st.download_button("Download PDF", data=pdf_bytes, file_name="laadplan.pdf", mime="application/pdf")
-            except Exception as e:
-                st.error(f"Fout bij PDF genereren: {e}")
+            # Voorkom crash bij teveel data in PDF
+            for p in active_units[:50]: 
+                pdf.cell(190, 7, f"Item {p['id']}: Pos {p['pos']}", ln=True)
+            
+            pdf_output = pdf.output(dest='S')
+            # Check of output bytes of string is (verschilt per fpdf versie)
+            pdf_bytes = pdf_output if isinstance(pdf_output, bytes) else pdf_output.encode('latin-1')
+            st.download_button("Download PDF", pdf_bytes, "laadplan.pdf", "application/pdf")
