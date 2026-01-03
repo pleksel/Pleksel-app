@@ -186,74 +186,70 @@ if uploaded_file:
 # =========================================================
 
 def calculate_metrics():
-
     orders = st.session_state.get('df_orders', pd.DataFrame())
     items = st.session_state.get('df_items', pd.DataFrame())
-
-    opt_stack = st.session_state.get('opt_stack', True)
-    opt_orient = st.session_state.get('opt_orient', True)
+    
+    # Trailer instellingen ophalen
+    TRAILER_L = st.session_state.get("trailer_length", 1360)
+    MAX_WIDTH = st.session_state.get("trailer_width", 245)
+    SPACING = 2
 
     if orders.empty or items.empty:
         return 0, 0, 0, 0, 0, []
 
     items_cp = items.copy()
     orders_cp = orders.copy()
-
     orders_cp['ItemNr'] = orders_cp['ItemNr'].astype(str)
     items_cp['ItemNr'] = items_cp['ItemNr'].astype(str)
 
     df = pd.merge(orders_cp, items_cp, on="ItemNr", how="inner")
-
     if df.empty:
         return 0, 0, 0, 0, 0, []
 
     units_to_load = []
+    positioned_units = []
+    curr_x, curr_y, row_depth = 0, 0, 0
 
     for _, row in df.iterrows():
         for i in range(int(row['Aantal'])):
-            units_to_load.append({
+            l = float(row['L_cm'])
+            b = float(row['B_cm'])
+            h = float(row['H_cm'])
+            
+            # Oriëntatie optimalisatie
+            if st.session_state.get('opt_orient', True) and l > b:
+                l, b = b, l
+
+            # Check of het in de huidige rij past qua breedte
+            if curr_y + b > MAX_WIDTH:
+                curr_x += row_depth + SPACING
+                curr_y = 0
+                row_depth = 0
+            
+            # Positioneer de unit
+            unit = {
                 'id': f"{row['ItemNr']}_{i}",
-                'dim': [float(row['L_cm']), float(row['B_cm']), float(row['H_cm'])],
+                'dim': [l, b, h],
+                'pos': [curr_x, curr_y],
+                'pz': 0, # Basis hoogte
                 'weight': float(row['Kg']),
                 'stackable': str(row.get('Stapelbaar', 'Ja')).lower() in ['ja', '1', 'yes', 'true']
-            })
+            }
+            
+            positioned_units.append(unit)
+            
+            # Update coördinaten voor de volgende unit
+            curr_y += b + SPACING
+            row_depth = max(row_depth, l)
 
-    positioned_units = []
-
-    curr_x = 0
-    curr_y = 0
-    row_depth = 0
-
-    MAX_WIDTH = 245
-    SPACING = 2
-
-    for u in units_to_load:
-        l, b, h = u['dim']
-
-        if opt_orient and l > b:
-            l, b = b, l
-
-        if curr_y + b > MAX_WIDTH:
-            curr_x += row_depth + SPACING
-            curr_y = 0
-            row_depth = 0
-
-            total_w = sum(p['weight'] for p in positioned_units)
-    total_v = sum(
-        (p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000
-        for p in positioned_units
-    )
-
-    # === Trailer instellingen ophalen (STAP 2) ===
-    TRAILER_L = st.session_state.get("trailer_length", 1360)
-
+    # Bereken totalen NA de loop
+    total_w = sum(p['weight'] for p in positioned_units)
+    total_v = sum((p['dim'][0] * p['dim'][1] * p['dim'][2]) / 1_000_000 for p in positioned_units)
     used_length = min(curr_x + row_depth, TRAILER_L)
     lm = round(used_length / 100, 2)
-
     trucks = int(np.ceil(lm / 13.6)) if lm > 0 else 0
 
-    return round(total_w, 1), round(total_v, 2), len(units_to_load), trucks, lm, positioned_units
-
+    return round(total_w, 1), round(total_v, 2), len(positioned_units), trucks, lm, positioned_units
 
 
 
@@ -266,13 +262,7 @@ def calculate_metrics():
 tab_data, tab_calc = st.tabs([L['data_tab'], L['calc_tab']])
 
 with tab_data:
-    t1, t2, t3, t4, t5 = st.tabs([
-    "Items",
-    "Boxes",
-    "Pallets",
-    "Orders",
-    "Trailers"
-])
+    t1, t2, t3, t4, t5 = st.tabs(["Items", "Boxes", "Pallets", "Orders", "Trailers"])
 
     with t1:
         st.session_state.df_items = st.data_editor(st.session_state.df_items, use_container_width=True, num_rows="dynamic", key="ed_items")
@@ -282,37 +272,32 @@ with tab_data:
         st.session_state.df_pallets = st.data_editor(st.session_state.df_pallets, use_container_width=True, num_rows="dynamic", key="ed_pallets")
     with t4:
         st.session_state.df_orders = st.data_editor(st.session_state.df_orders, use_container_width=True, num_rows="dynamic", key="ed_orders")
-with t5:
-    st.subheader("Trailer / Container type")
+    
+    with t5:
+        st.subheader("Trailer / Container type")
+        trailer_type = st.selectbox(
+            "Kies trailer",
+            ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
+        )
 
-    trailer_type = st.selectbox(
-        "Kies trailer",
-        ["Standaard trailer (13.6m)", "40ft container", "20ft container", "Custom"]
-    )
-
-    if trailer_type == "Standaard trailer (13.6m)":
-        st.session_state.trailer_length = 1360
-        st.session_state.trailer_width  = 245
-        st.session_state.trailer_height = 270
-
-    elif trailer_type == "40ft container":
-        st.session_state.trailer_length = 1203
-        st.session_state.trailer_width  = 235
-        st.session_state.trailer_height = 239
-
-    elif trailer_type == "20ft container":
-        st.session_state.trailer_length = 590
-        st.session_state.trailer_width  = 235
-        st.session_state.trailer_height = 239
-
-    else:  # Custom
-        st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
-        st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
-        st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
-
+        if trailer_type == "Standaard trailer (13.6m)":
+            st.session_state.trailer_length = 1360
+            st.session_state.trailer_width  = 245
+            st.session_state.trailer_height = 270
+        elif trailer_type == "40ft container":
+            st.session_state.trailer_length = 1203
+            st.session_state.trailer_width  = 235
+            st.session_state.trailer_height = 239
+        elif trailer_type == "20ft container":
+            st.session_state.trailer_length = 590
+            st.session_state.trailer_width  = 235
+            st.session_state.trailer_height = 239
+        else:  # Custom
+            st.session_state.trailer_length = st.number_input("Lengte (cm)", 500, 2000, 1360)
+            st.session_state.trailer_width  = st.number_input("Breedte (cm)", 200, 300, 245)
+            st.session_state.trailer_height = st.number_input("Hoogte (cm)", 200, 350, 270)
 
 with tab_calc:
-    # Voer berekening uit (houdt rekening met toggles uit de sidebar)
     res_w, res_v, res_p, res_t, res_lm, active_units = calculate_metrics()
 
     # Dashboard Metrics
